@@ -83,7 +83,7 @@ export default function Laboratorio() {
     <div className="p-8 max-w-3xl">
       <h1 className="text-3xl font-bold mb-2">Laboratório</h1>
       <p className="text-muted mb-8">
-        Processe seus criativos com ferramentas de áudio profissional.
+        Camufle o áudio do seu vídeo de forma discreta e profissional.
       </p>
 
       {/* Seletor de modo */}
@@ -97,7 +97,7 @@ export default function Laboratorio() {
           }`}
         >
           <Music size={18} />
-          Melhorar Áudio
+          Camuflar Video
         </button>
         <button
           onClick={() => { setModo("mesclar"); resetForm(); }}
@@ -108,7 +108,7 @@ export default function Laboratorio() {
           }`}
         >
           <Merge size={18} />
-          Mesclar com Música
+          Mesclar Video + Música
         </button>
       </div>
 
