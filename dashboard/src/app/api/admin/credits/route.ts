@@ -7,11 +7,15 @@ async function verifyAdmin(req: NextRequest) {
 
   const token = authHeader.replace("Bearer ", "");
   const supabase = createServerClient(token);
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
 
-  if (user.email !== process.env.ADMIN_EMAIL) return null;
-  return user;
+  try {
+    const { data, error: authError } = await supabase.auth.getUser();
+    if (authError || !data.user) return null;
+    if (data.user.email !== process.env.ADMIN_EMAIL) return null;
+    return data.user;
+  } catch {
+    return null;
+  }
 }
 
 // POST - ajustar créditos de um usuário

@@ -12,9 +12,15 @@ export async function POST(req: NextRequest) {
 
     const token = authHeader.replace("Bearer ", "");
     const supabase = createServerClient(token);
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (authError || !user) {
+    let user;
+    try {
+      const { data, error: authError } = await supabase.auth.getUser();
+      if (authError || !data.user) {
+        return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      }
+      user = data.user;
+    } catch {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 

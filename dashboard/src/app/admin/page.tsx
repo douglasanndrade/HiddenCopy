@@ -106,7 +106,7 @@ export default function AdminPage() {
 
   const updatePlan = (idx: number, field: keyof Plan, value: string | number | boolean) => {
     const updated = [...plans];
-    (updated[idx] as Record<string, unknown>)[field] = value;
+    (updated[idx] as unknown as Record<string, unknown>)[field] = value;
     setPlans(updated);
   };
 
