@@ -4,7 +4,9 @@ import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
 import {
   Users, Plus, Minus, Search, Loader2, Save,
-  CreditCard, Settings, Trash2, CheckCircle
+  CreditCard, Settings, Trash2, CheckCircle,
+  DollarSign, TrendingUp, Calendar, Filter,
+  ArrowUpRight, ArrowDownRight, Clock
 } from "lucide-react";
 
 interface UserProfile {
@@ -25,6 +27,22 @@ interface Plan {
   icon: string;
 }
 
+interface Transaction {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  credits: number;
+  amount: number;
+  status: string;
+  syncpay_identifier: string;
+  pix_code: string;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+  user_email: string;
+  user_name: string;
+}
+
 const defaultPlans: Plan[] = [
   {
     id: "teste", name: "Teste", credits: 5, price: 79.9,
@@ -43,11 +61,12 @@ const defaultPlans: Plan[] = [
   },
 ];
 
-type Tab = "users" | "plans";
+type Tab = "users" | "plans" | "vendas";
+type PeriodFilter = "hoje" | "7d" | "30d" | "todos";
 
 export default function AdminPage() {
   const { session } = useAuth();
-  const [tab, setTab] = useState<Tab>("users");
+  const [tab, setTab] = useState<Tab>("vendas");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -56,6 +75,13 @@ export default function AdminPage() {
   const [plans, setPlans] = useState<Plan[]>(defaultPlans);
   const [plansSaved, setPlansSaved] = useState(false);
   const [newFeature, setNewFeature] = useState<Record<string, string>>({});
+
+  // Vendas state
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [txLoading, setTxLoading] = useState(true);
+  const [txSearch, setTxSearch] = useState("");
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("30d");
+  const [statusFilter, setStatusFilter] = useState<string>("todos");
 
   const fetchUsers = async () => {
     if (!session) return;
@@ -81,9 +107,25 @@ export default function AdminPage() {
     } catch {}
   };
 
+  const fetchTransactions = async () => {
+    if (!session) return;
+    setTxLoading(true);
+    try {
+      const res = await fetch("/api/admin/transactions", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTransactions(data.transactions || []);
+      }
+    } catch {}
+    setTxLoading(false);
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchPlans();
+    fetchTransactions();
   }, [session]);
 
   const adjustCredits = async (userId: string, action: "add" | "set") => {
@@ -154,23 +196,86 @@ export default function AdminPage() {
       u.name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  // ===== Filtros de vendas =====
+  const now = new Date();
+  const getFilterDate = (period: PeriodFilter): Date | null => {
+    if (period === "hoje") {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    if (period === "7d") return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    if (period === "30d") return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return null;
+  };
+
+  const filteredTx = transactions.filter((tx) => {
+    const filterDate = getFilterDate(periodFilter);
+    if (filterDate && new Date(tx.created_at) < filterDate) return false;
+    if (statusFilter !== "todos" && tx.status !== statusFilter) return false;
+    if (txSearch) {
+      const q = txSearch.toLowerCase();
+      return (
+        tx.user_email?.toLowerCase().includes(q) ||
+        tx.user_name?.toLowerCase().includes(q) ||
+        tx.plan_id?.toLowerCase().includes(q) ||
+        tx.syncpay_identifier?.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const completedTx = filteredTx.filter((tx) => tx.status === "completed");
+  const pendingTx = filteredTx.filter((tx) => tx.status === "pending" || tx.status === "WAITING_FOR_APPROVAL");
+  const totalRevenue = completedTx.reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const totalCredits = completedTx.reduce((sum, tx) => sum + tx.credits, 0);
+
+  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const formatDate = (d: string) => new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  const statusLabel = (s: string) => {
+    if (s === "completed") return "Pago";
+    if (s === "pending" || s === "WAITING_FOR_APPROVAL") return "Pendente";
+    if (s === "expired" || s === "cancelled") return "Expirado";
+    return s;
+  };
+
+  const statusColor = (s: string) => {
+    if (s === "completed") return "bg-success/15 text-success";
+    if (s === "pending" || s === "WAITING_FOR_APPROVAL") return "bg-yellow-500/15 text-yellow-400";
+    return "bg-red-500/15 text-red-400";
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between mb-6 sm:mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Painel Admin</h1>
-          <p className="text-muted text-sm sm:text-base">Gerencie usuários, créditos e planos.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 animate-fade-in">
+            <span className="text-gradient">Painel Admin</span>
+          </h1>
+          <p className="text-muted text-sm sm:text-base">Gerencie vendas, usuários e planos.</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 sm:mb-8">
+      <div className="flex gap-2 mb-6 sm:mb-8 flex-wrap">
+        <button
+          onClick={() => setTab("vendas")}
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all ${
+            tab === "vendas"
+              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent"
+              : "glass-card text-muted hover:text-foreground"
+          }`}
+        >
+          <DollarSign size={18} />
+          Vendas
+        </button>
         <button
           onClick={() => setTab("users")}
           className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all ${
             tab === "users"
-              ? "bg-accent text-white"
-              : "bg-card border border-border text-muted hover:text-foreground"
+              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent"
+              : "glass-card text-muted hover:text-foreground"
           }`}
         >
           <Users size={18} />
@@ -180,8 +285,8 @@ export default function AdminPage() {
           onClick={() => setTab("plans")}
           className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all ${
             tab === "plans"
-              ? "bg-accent text-white"
-              : "bg-card border border-border text-muted hover:text-foreground"
+              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent"
+              : "glass-card text-muted hover:text-foreground"
           }`}
         >
           <Settings size={18} />
@@ -189,9 +294,168 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* Tab Usuários */}
+      {/* ===== TAB VENDAS ===== */}
+      {tab === "vendas" && (
+        <div className="animate-fade-in">
+          {/* Stats cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="glass-card rounded-xl p-5 animate-fade-in-up delay-1">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-success/15 flex items-center justify-center">
+                  <DollarSign size={20} className="text-success" />
+                </div>
+                <span className="text-xs text-muted font-medium uppercase tracking-wider">Receita</span>
+              </div>
+              <p className="text-2xl font-bold text-success">{formatCurrency(totalRevenue)}</p>
+              <p className="text-xs text-muted mt-1">{completedTx.length} vendas confirmadas</p>
+            </div>
+
+            <div className="glass-card rounded-xl p-5 animate-fade-in-up delay-2">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-accent-soft flex items-center justify-center">
+                  <TrendingUp size={20} className="text-accent" />
+                </div>
+                <span className="text-xs text-muted font-medium uppercase tracking-wider">Créditos Vendidos</span>
+              </div>
+              <p className="text-2xl font-bold text-accent">{totalCredits}</p>
+              <p className="text-xs text-muted mt-1">total creditado</p>
+            </div>
+
+            <div className="glass-card rounded-xl p-5 animate-fade-in-up delay-3">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-yellow-500/15 flex items-center justify-center">
+                  <Clock size={20} className="text-yellow-400" />
+                </div>
+                <span className="text-xs text-muted font-medium uppercase tracking-wider">Pendentes</span>
+              </div>
+              <p className="text-2xl font-bold text-yellow-400">{pendingTx.length}</p>
+              <p className="text-xs text-muted mt-1">{formatCurrency(pendingTx.reduce((s, t) => s + Number(t.amount), 0))} em aberto</p>
+            </div>
+
+            <div className="glass-card rounded-xl p-5 animate-fade-in-up delay-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-500/15 flex items-center justify-center">
+                  <CreditCard size={20} className="text-blue-400" />
+                </div>
+                <span className="text-xs text-muted font-medium uppercase tracking-wider">Ticket Médio</span>
+              </div>
+              <p className="text-2xl font-bold text-blue-400">
+                {completedTx.length > 0 ? formatCurrency(totalRevenue / completedTx.length) : "R$ 0"}
+              </p>
+              <p className="text-xs text-muted mt-1">por venda</p>
+            </div>
+          </div>
+
+          {/* Filtros */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                type="text"
+                placeholder="Buscar por email, nome ou plano..."
+                value={txSearch}
+                onChange={(e) => setTxSearch(e.target.value)}
+                className="w-full glass-card rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-accent/50"
+              />
+            </div>
+            <div className="flex gap-2">
+              {(["hoje", "7d", "30d", "todos"] as PeriodFilter[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriodFilter(p)}
+                  className={`px-4 py-3 rounded-xl text-xs font-medium transition-all ${
+                    periodFilter === p
+                      ? "bg-accent text-white"
+                      : "glass-card text-muted hover:text-foreground"
+                  }`}
+                >
+                  {p === "hoje" ? "Hoje" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "Todos"}
+                </button>
+              ))}
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="glass-card rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-accent/50 bg-transparent"
+            >
+              <option value="todos">Todos status</option>
+              <option value="completed">Pagos</option>
+              <option value="pending">Pendentes</option>
+            </select>
+          </div>
+
+          {/* Tabela de transações */}
+          {txLoading ? (
+            <div className="flex items-center gap-2 text-muted p-8">
+              <Loader2 size={20} className="animate-spin" />
+              Carregando transações...
+            </div>
+          ) : (
+            <div className="glass-card rounded-2xl overflow-x-auto">
+              <table className="w-full min-w-[800px]">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    <th className="text-left text-xs text-muted font-medium px-5 py-4 uppercase tracking-wider">Data</th>
+                    <th className="text-left text-xs text-muted font-medium px-5 py-4 uppercase tracking-wider">Cliente</th>
+                    <th className="text-left text-xs text-muted font-medium px-5 py-4 uppercase tracking-wider">Plano</th>
+                    <th className="text-center text-xs text-muted font-medium px-5 py-4 uppercase tracking-wider">Créditos</th>
+                    <th className="text-right text-xs text-muted font-medium px-5 py-4 uppercase tracking-wider">Valor</th>
+                    <th className="text-center text-xs text-muted font-medium px-5 py-4 uppercase tracking-wider">Status</th>
+                    <th className="text-left text-xs text-muted font-medium px-5 py-4 uppercase tracking-wider">Pagamento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTx.map((tx) => (
+                    <tr key={tx.id} className="border-b border-border/30 last:border-0 hover:bg-card-hover/50 transition-colors">
+                      <td className="px-5 py-4">
+                        <span className="text-sm text-foreground">{formatDate(tx.created_at)}</span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{tx.user_name || "—"}</p>
+                          <p className="text-xs text-muted">{tx.user_email}</p>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="text-sm font-medium text-foreground capitalize">{tx.plan_id}</span>
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className="inline-flex items-center gap-1 bg-accent-soft text-accent text-sm font-bold px-3 py-1 rounded-lg">
+                          {tx.credits}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <span className="text-sm font-bold text-foreground">{formatCurrency(Number(tx.amount))}</span>
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${statusColor(tx.status)}`}>
+                          {tx.status === "completed" ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                          {statusLabel(tx.status)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="text-xs text-muted">
+                          {tx.paid_at ? formatDate(tx.paid_at) : "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {filteredTx.length === 0 && (
+                <div className="p-12 text-center text-muted text-sm">
+                  Nenhuma transação encontrada.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== TAB USUARIOS ===== */}
       {tab === "users" && (
-        <>
+        <div className="animate-fade-in">
           <div className="mb-6">
             <div className="relative">
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
@@ -200,7 +464,7 @@ export default function AdminPage() {
                 placeholder="Buscar por email ou nome..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-card border border-border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-accent"
+                className="w-full glass-card rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-accent/50"
               />
             </div>
           </div>
@@ -211,10 +475,10 @@ export default function AdminPage() {
               Carregando...
             </div>
           ) : (
-            <div className="bg-card border border-border rounded-2xl overflow-x-auto">
+            <div className="glass-card rounded-2xl overflow-x-auto">
               <table className="w-full min-w-[640px]">
                 <thead>
-                  <tr className="border-b border-border bg-card-hover">
+                  <tr className="border-b border-border/50">
                     <th className="text-left text-xs text-muted font-medium px-6 py-4">Usuário</th>
                     <th className="text-left text-xs text-muted font-medium px-6 py-4">Email</th>
                     <th className="text-center text-xs text-muted font-medium px-6 py-4">Créditos</th>
@@ -224,7 +488,7 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {filtered.map((u) => (
-                    <tr key={u.id} className="border-b border-border last:border-0 hover:bg-card-hover transition-colors">
+                    <tr key={u.id} className="border-b border-border/30 last:border-0 hover:bg-card-hover/50 transition-colors">
                       <td className="px-6 py-4">
                         <span className="text-sm font-medium">{u.name || "--"}</span>
                       </td>
@@ -287,12 +551,12 @@ export default function AdminPage() {
               )}
             </div>
           )}
-        </>
+        </div>
       )}
 
-      {/* Tab Planos */}
+      {/* ===== TAB PLANOS ===== */}
       {tab === "plans" && (
-        <>
+        <div className="animate-fade-in">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
             <p className="text-sm text-muted">
               Edite os planos abaixo. As mudanças são salvas no servidor e afetam todos os usuários.
@@ -300,7 +564,7 @@ export default function AdminPage() {
             <button
               onClick={savePlans}
               disabled={plansSaving}
-              className="flex items-center gap-2 px-5 py-3 bg-accent text-white rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-accent to-accent-hover text-white rounded-xl text-sm font-medium btn-glow transition-all disabled:opacity-50"
             >
               {plansSaved ? (
                 <>
@@ -325,12 +589,11 @@ export default function AdminPage() {
             {plans.map((plan, idx) => (
               <div
                 key={plan.id}
-                className={`bg-card border rounded-2xl p-6 ${
-                  plan.popular ? "border-accent" : "border-border"
+                className={`glass-card rounded-2xl p-6 ${
+                  plan.popular ? "border-accent" : ""
                 }`}
               >
                 <div className="space-y-4">
-                  {/* Nome */}
                   <div>
                     <label className="text-xs text-muted block mb-1">Nome do Plano</label>
                     <input
@@ -341,7 +604,6 @@ export default function AdminPage() {
                     />
                   </div>
 
-                  {/* Preço e Créditos */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-muted block mb-1">Preço (R$)</label>
@@ -364,7 +626,6 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  {/* Ícone */}
                   <div>
                     <label className="text-xs text-muted block mb-1">Ícone</label>
                     <select
@@ -378,7 +639,6 @@ export default function AdminPage() {
                     </select>
                   </div>
 
-                  {/* Popular */}
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
@@ -389,7 +649,6 @@ export default function AdminPage() {
                     <span className="text-sm">Marcar como popular</span>
                   </label>
 
-                  {/* Features */}
                   <div>
                     <label className="text-xs text-muted block mb-2">Recursos</label>
                     <div className="space-y-2">
@@ -430,7 +689,7 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

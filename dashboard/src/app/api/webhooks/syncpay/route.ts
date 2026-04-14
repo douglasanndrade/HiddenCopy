@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 
+// Status que indicam pagamento confirmado
+const PAID_STATUSES = [
+  "completed",
+  "approved",
+  "paid",
+  "settled",
+  "confirmed",
+  "COMPLETED",
+  "APPROVED",
+  "PAID",
+  "SETTLED",
+  "CONFIRMED",
+];
+
+function isPaidStatus(status: string): boolean {
+  return PAID_STATUSES.includes(status) ||
+    status.toLowerCase().includes("paid") ||
+    status.toLowerCase().includes("approved") ||
+    status.toLowerCase().includes("completed") ||
+    status.toLowerCase().includes("settled");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const event = req.headers.get("event");
@@ -14,13 +36,20 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const data = body.data;
+    const data = body.data || body;
 
-    if (!data?.id || !data?.status) {
+    // Log completo do payload para debug
+    console.log(`Webhook SyncPay recebido:`, JSON.stringify({ event, data: body }, null, 2));
+
+    const identifier = data?.id || data?.identifier || body?.id || body?.identifier;
+    const status = data?.status || body?.status;
+
+    if (!identifier) {
+      console.warn("Webhook: payload sem identifier", JSON.stringify(body));
       return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
     }
 
-    console.log(`Webhook SyncPay [${event}]: ${data.id} -> ${data.status}`);
+    console.log(`Webhook SyncPay [${event}]: ${identifier} -> ${status}`);
 
     const supabase = createServiceClient();
 
@@ -28,31 +57,35 @@ export async function POST(req: NextRequest) {
     const { data: transaction, error: txError } = await supabase
       .from("transactions")
       .select("*")
-      .eq("syncpay_identifier", data.id)
+      .eq("syncpay_identifier", identifier)
       .single();
 
     if (txError || !transaction) {
-      console.warn(`Webhook: transação não encontrada para ${data.id}`);
+      console.warn(`Webhook: transação não encontrada para identifier=${identifier}`);
       return NextResponse.json({ ok: true });
     }
 
-    // Se já foi processada, ignora
+    console.log(`Webhook: transação encontrada id=${transaction.id}, status_atual=${transaction.status}, novo_status=${status}`);
+
+    // Se já foi completada, ignora
     if (transaction.status === "completed") {
+      console.log("Webhook: transação já completada, ignorando");
       return NextResponse.json({ ok: true });
     }
-
-    // Atualizar status da transação
-    await supabase
-      .from("transactions")
-      .update({
-        status: data.status,
-        paid_at: data.status === "completed" ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", transaction.id);
 
     // Se pagamento confirmado, adicionar créditos
-    if (data.status === "completed") {
+    if (status && isPaidStatus(status)) {
+      // Atualizar transação como completed
+      await supabase
+        .from("transactions")
+        .update({
+          status: "completed",
+          paid_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transaction.id);
+
+      // Adicionar créditos
       const { data: profile } = await supabase
         .from("profiles")
         .select("credits")
@@ -71,8 +104,19 @@ export async function POST(req: NextRequest) {
         .eq("id", transaction.user_id);
 
       console.log(
-        `Créditos adicionados: user=${transaction.user_id}, +${transaction.credits} (total: ${newCredits})`
+        `CREDITOS ADICIONADOS: user=${transaction.user_id}, +${transaction.credits} (${currentCredits} -> ${newCredits})`
       );
+    } else {
+      // Atualizar status da transação sem creditar
+      await supabase
+        .from("transactions")
+        .update({
+          status: status || transaction.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transaction.id);
+
+      console.log(`Webhook: status atualizado para ${status} (sem creditar)`);
     }
 
     return NextResponse.json({ ok: true });
