@@ -77,8 +77,14 @@ function RevealSection({ children, className = "" }: { children: React.ReactNode
 export default function LandingPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [plansLoading, setPlansLoading] = useState(true);
+  const fallbackPlans: Plan[] = [
+    { id: "teste", name: "Teste", credits: 5, price: 79.9, features: ["5 processamentos", "Camuflar vídeo", "Camuflar vídeo + áudio", "Download em MP4"], popular: false, icon: "zap" },
+    { id: "basico", name: "Básico", credits: 10, price: 139.9, features: ["10 processamentos", "Camuflar vídeo", "Camuflar vídeo + áudio", "Download em MP4", "Prioridade no processamento"], popular: true, icon: "star" },
+    { id: "pro", name: "Pro", credits: 50, price: 349.9, features: ["50 processamentos", "Camuflar vídeo", "Camuflar vídeo + áudio", "Download em MP4", "Prioridade no processamento", "Suporte prioritário"], popular: false, icon: "crown" },
+  ];
+
+  const [plans, setPlans] = useState<Plan[]>(fallbackPlans);
+  const [plansLoading, setPlansLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -92,8 +98,7 @@ export default function LandingPage() {
       .then((data) => {
         if (data?.plans?.length) setPlans(data.plans);
       })
-      .catch(() => {})
-      .finally(() => setPlansLoading(false));
+      .catch(() => {});
   }, []);
 
   if (loading || user) return null;
