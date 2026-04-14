@@ -14,7 +14,8 @@
       "Bash(ls \"C:/ffmpeg\"*)",
       "Read(//c/Program Files/**)",
       "Read(//c//**)",
-      "Bash(taskkill //F //IM node.exe)"
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(gh auth:*)"
     ]
   }
 }
