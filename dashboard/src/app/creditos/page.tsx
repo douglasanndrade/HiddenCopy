@@ -1,18 +1,26 @@
 "use client";
 
-import { Check, Zap, Star, Crown, Loader2, Copy, CheckCircle } from "lucide-react";
-import { useState } from "react";
+import { Check, Zap, Star, Crown, Loader2, Copy, CheckCircle, X, Sparkles } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { QRCode } from "react-qrcode-logo";
 
-const plans = [
+interface Plan {
+  id: string;
+  name: string;
+  credits: number;
+  price: number;
+  features: string[];
+  popular: boolean;
+  icon: string;
+}
+
+const defaultPlans: Plan[] = [
   {
     id: "teste",
     name: "Teste",
     credits: 5,
-    price: "79,90",
-    priceNum: 79.9,
-    icon: Zap,
+    price: 79.9,
     features: [
       "5 processamentos",
       "Melhorar áudio",
@@ -20,14 +28,13 @@ const plans = [
       "Download em MP4",
     ],
     popular: false,
+    icon: "zap",
   },
   {
     id: "basico",
     name: "Básico",
     credits: 10,
-    price: "139,90",
-    priceNum: 139.9,
-    icon: Star,
+    price: 139.9,
     features: [
       "10 processamentos",
       "Melhorar áudio",
@@ -36,14 +43,13 @@ const plans = [
       "Prioridade no processamento",
     ],
     popular: true,
+    icon: "star",
   },
   {
     id: "pro",
     name: "Pro",
     credits: 50,
-    price: "349,90",
-    priceNum: 349.9,
-    icon: Crown,
+    price: 349.9,
     features: [
       "50 processamentos",
       "Melhorar áudio",
@@ -53,31 +59,48 @@ const plans = [
       "Suporte prioritário",
     ],
     popular: false,
+    icon: "crown",
   },
 ];
 
+const iconMap: Record<string, React.ReactNode> = {
+  zap: <Zap size={28} />,
+  star: <Star size={28} />,
+  crown: <Crown size={28} />,
+};
+
 export default function Creditos() {
   const { credits, session, refreshCredits } = useAuth();
+  const [plans, setPlans] = useState<Plan[]>(defaultPlans);
   const [buying, setBuying] = useState(false);
+  const [showPixModal, setShowPixModal] = useState(false);
   const [pixCode, setPixCode] = useState<string | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Dados do cliente para o Pix
   const [showForm, setShowForm] = useState(false);
   const [cpf, setCpf] = useState("");
   const [phone, setPhone] = useState("");
-  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
 
-  const handleBuy = async (planId: string) => {
-    setPendingPlanId(planId);
+  useEffect(() => {
+    // Carregar planos do localStorage (admin pode ter editado)
+    const saved = localStorage.getItem("hiddencopy_plans");
+    if (saved) {
+      try {
+        setPlans(JSON.parse(saved));
+      } catch {}
+    }
+  }, []);
+
+  const handleBuy = (plan: Plan) => {
+    setPendingPlan(plan);
     setShowForm(true);
     setError(null);
   };
 
   const confirmBuy = async () => {
-    if (!session || !pendingPlanId) return;
+    if (!session || !pendingPlan) return;
     if (!cpf || cpf.length !== 11) {
       setError("CPF deve ter 11 dígitos (apenas números)");
       return;
@@ -98,7 +121,7 @@ export default function Creditos() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ planId: pendingPlanId, cpf, phone }),
+        body: JSON.stringify({ planId: pendingPlan.id, cpf, phone }),
       });
 
       if (!res.ok) {
@@ -108,14 +131,12 @@ export default function Creditos() {
 
       const data = await res.json();
       setPixCode(data.pix_code);
-      setSelectedPlan(pendingPlanId);
+      setSelectedPlan(pendingPlan);
+      setShowPixModal(true);
 
-      // Poll para verificar se o pagamento foi confirmado
       const interval = setInterval(async () => {
         await refreshCredits();
       }, 5000);
-
-      // Para de verificar após 15 minutos
       setTimeout(() => clearInterval(interval), 15 * 60 * 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao gerar pagamento");
@@ -132,163 +153,249 @@ export default function Creditos() {
     }
   };
 
+  const formatPrice = (price: number) => {
+    return price.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  };
+
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-bold mb-2">Créditos</h1>
-      <p className="text-muted mb-4">Cada processamento consome 1 crédito.</p>
-
-      <div className="bg-card border border-border rounded-xl p-6 mb-10 inline-flex items-center gap-4">
-        <div className="w-12 h-12 bg-accent-soft rounded-lg flex items-center justify-center">
-          <Zap size={24} className="text-accent" />
-        </div>
-        <div>
-          <p className="text-sm text-muted">Seus créditos</p>
-          <p className="text-2xl font-bold">
-            <span className="text-accent">{credits}</span> restantes
-          </p>
-        </div>
+      {/* Header */}
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold mb-2">Créditos</h1>
+        <p className="text-muted">Escolha o plano ideal para seus criativos.</p>
       </div>
 
-      {/* QR Code do Pix */}
-      {pixCode && (
-        <div className="bg-card border border-accent/30 rounded-xl p-8 mb-10 max-w-md">
-          <h3 className="text-lg font-semibold mb-4 text-center">
-            Pague via Pix
-          </h3>
-          <div className="flex justify-center mb-4 bg-white p-4 rounded-lg">
-            <QRCode value={pixCode} size={220} />
+      {/* Saldo atual */}
+      <div className="bg-gradient-to-r from-accent/10 via-accent/5 to-transparent border border-accent/20 rounded-2xl p-8 mb-12">
+        <div className="flex items-center gap-6">
+          <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center">
+            <Sparkles size={32} className="text-accent" />
           </div>
-          <button
-            onClick={copyPixCode}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-card-hover border border-border rounded-lg text-sm hover:border-accent transition-all"
-          >
-            {copied ? (
-              <>
-                <CheckCircle size={16} className="text-success" />
-                Copiado!
-              </>
-            ) : (
-              <>
-                <Copy size={16} />
-                Copiar código Pix
-              </>
-            )}
-          </button>
-          <p className="text-xs text-muted text-center mt-3">
-            Seus créditos serão adicionados automaticamente após o pagamento.
-          </p>
-        </div>
-      )}
-
-      {/* Formulário CPF/Telefone */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Dados para o Pix</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-muted block mb-1">CPF (apenas números)</label>
-                <input
-                  type="text"
-                  value={cpf}
-                  onChange={(e) => setCpf(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                  placeholder="12345678900"
-                  className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted block mb-1">Telefone (apenas números)</label>
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                  placeholder="51999999999"
-                  className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-accent"
-                />
-              </div>
-              {error && <p className="text-red-400 text-sm">{error}</p>}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setShowForm(false); setError(null); }}
-                  className="flex-1 py-2.5 bg-card-hover border border-border rounded-lg text-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmBuy}
-                  disabled={buying}
-                  className="flex-1 py-2.5 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent-hover disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {buying && <Loader2 size={14} className="animate-spin" />}
-                  Gerar Pix
-                </button>
-              </div>
+          <div>
+            <p className="text-sm text-muted mb-1">Seu saldo atual</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-bold text-accent">{credits}</span>
+              <span className="text-lg text-muted">créditos</span>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      <h2 className="text-xl font-semibold mb-6">Adquirir Créditos</h2>
+      {/* Planos */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+        {plans.map((plan) => (
+          <div
+            key={plan.id}
+            className={`relative bg-card rounded-2xl flex flex-col overflow-hidden transition-all hover:scale-[1.02] ${
+              plan.popular
+                ? "border-2 border-accent shadow-xl shadow-accent/10"
+                : "border border-border hover:border-muted"
+            }`}
+          >
+            {plan.popular && (
+              <div className="bg-accent text-white text-xs font-bold text-center py-2 tracking-wider uppercase">
+                Mais Popular
+              </div>
+            )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {plans.map((plan) => {
-          const Icon = plan.icon;
-          return (
-            <div
-              key={plan.name}
-              className={`relative bg-card border rounded-xl p-6 flex flex-col ${
-                plan.popular
-                  ? "border-accent shadow-lg shadow-accent/5"
-                  : "border-border"
-              }`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent text-white text-xs font-bold px-3 py-1 rounded-full">
-                  POPULAR
-                </div>
-              )}
-
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-accent-soft rounded-lg flex items-center justify-center">
-                  <Icon size={20} className="text-accent" />
+            <div className="p-8 flex flex-col flex-1">
+              {/* Ícone e nome */}
+              <div className="flex items-center gap-4 mb-6">
+                <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
+                  plan.popular ? "bg-accent text-white" : "bg-accent-soft text-accent"
+                }`}>
+                  {iconMap[plan.icon] || <Zap size={28} />}
                 </div>
                 <div>
-                  <h3 className="font-semibold">{plan.name}</h3>
-                  <p className="text-xs text-muted">{plan.credits} criativos</p>
+                  <h3 className="text-xl font-bold">{plan.name}</h3>
+                  <p className="text-sm text-muted">{plan.credits} criativos</p>
                 </div>
               </div>
 
-              <div className="mb-6">
-                <span className="text-3xl font-bold">R$ {plan.price}</span>
+              {/* Preço */}
+              <div className="mb-8">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm text-muted">R$</span>
+                  <span className="text-4xl font-bold">{formatPrice(plan.price)}</span>
+                </div>
+                <p className="text-xs text-muted mt-1">
+                  R$ {(plan.price / plan.credits).toFixed(2)} por criativo
+                </p>
               </div>
 
-              <ul className="space-y-3 mb-6 flex-1">
+              {/* Features */}
+              <ul className="space-y-4 mb-8 flex-1">
                 {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-muted">
-                    <Check size={16} className="text-success shrink-0" />
-                    {feature}
+                  <li key={feature} className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check size={12} className="text-success" />
+                    </div>
+                    <span className="text-sm text-foreground/80">{feature}</span>
                   </li>
                 ))}
               </ul>
 
+              {/* Botão */}
               <button
-                onClick={() => handleBuy(plan.id)}
+                onClick={() => handleBuy(plan)}
                 disabled={buying}
-                className={`w-full py-3 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                className={`w-full py-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
                   plan.popular
-                    ? "bg-accent text-white hover:bg-accent-hover"
-                    : "bg-card-hover border border-border text-foreground hover:border-accent"
+                    ? "bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/25"
+                    : "bg-card-hover border border-border text-foreground hover:border-accent hover:text-accent"
                 } disabled:opacity-50`}
               >
-                {buying && selectedPlan === plan.id && (
-                  <Loader2 size={16} className="animate-spin" />
-                )}
-                Adquirir
+                {buying ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : null}
+                Adquirir Agora
               </button>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
+
+      {error && (
+        <div className="max-w-md mx-auto bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3 mb-6">
+          <X size={20} className="text-red-500 shrink-0" />
+          <span className="text-red-400 text-sm">{error}</span>
+        </div>
+      )}
+
+      {/* Modal CPF/Telefone */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold">Finalizar Compra</h3>
+              <button
+                onClick={() => { setShowForm(false); setError(null); }}
+                className="p-2 hover:bg-card-hover rounded-lg transition-colors"
+              >
+                <X size={20} className="text-muted" />
+              </button>
+            </div>
+
+            {pendingPlan && (
+              <div className="bg-accent-soft rounded-xl p-4 mb-6 flex items-center justify-between">
+                <div>
+                  <p className="font-semibold">{pendingPlan.name}</p>
+                  <p className="text-xs text-muted">{pendingPlan.credits} créditos</p>
+                </div>
+                <p className="text-xl font-bold text-accent">R$ {formatPrice(pendingPlan.price)}</p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium block mb-2">CPF</label>
+                <input
+                  type="text"
+                  value={cpf}
+                  onChange={(e) => setCpf(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                  placeholder="Apenas números (11 dígitos)"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-2">Telefone</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                  placeholder="DDD + número (ex: 51999999999)"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors"
+                />
+              </div>
+
+              {error && <p className="text-red-400 text-sm">{error}</p>}
+
+              <button
+                onClick={confirmBuy}
+                disabled={buying}
+                className="w-full py-4 bg-accent text-white rounded-xl font-semibold text-sm hover:bg-accent-hover transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-accent/25 mt-2"
+              >
+                {buying && <Loader2 size={18} className="animate-spin" />}
+                Gerar QR Code Pix
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pix QR Code */}
+      {showPixModal && pixCode && selectedPlan && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-2xl max-w-lg w-full mx-4 shadow-2xl overflow-hidden">
+            {/* Header do modal */}
+            <div className="bg-gradient-to-r from-accent/20 to-accent/5 p-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold">Pagamento Pix</h3>
+                <p className="text-sm text-muted">
+                  Plano {selectedPlan.name} — {selectedPlan.credits} créditos
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPixModal(false)}
+                className="p-2 hover:bg-card-hover rounded-lg transition-colors"
+              >
+                <X size={20} className="text-muted" />
+              </button>
+            </div>
+
+            <div className="p-8">
+              {/* Valor */}
+              <div className="text-center mb-6">
+                <p className="text-sm text-muted mb-1">Valor a pagar</p>
+                <p className="text-4xl font-bold text-accent">
+                  R$ {formatPrice(selectedPlan.price)}
+                </p>
+              </div>
+
+              {/* QR Code */}
+              <div className="flex justify-center mb-6">
+                <div className="bg-white p-5 rounded-2xl shadow-inner">
+                  <QRCode
+                    value={pixCode}
+                    size={250}
+                    qrStyle="dots"
+                    eyeRadius={8}
+                    fgColor="#121212"
+                  />
+                </div>
+              </div>
+
+              {/* Copia e cola */}
+              <button
+                onClick={copyPixCode}
+                className="w-full flex items-center justify-center gap-3 py-4 bg-card-hover border border-border rounded-xl text-sm font-medium hover:border-accent transition-all mb-4"
+              >
+                {copied ? (
+                  <>
+                    <CheckCircle size={18} className="text-success" />
+                    <span className="text-success">Código copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={18} />
+                    Copiar código Pix (copia e cola)
+                  </>
+                )}
+              </button>
+
+              {/* Info */}
+              <div className="bg-accent-soft rounded-xl p-4 flex items-start gap-3">
+                <div className="w-2 h-2 bg-accent rounded-full mt-1.5 shrink-0 animate-pulse" />
+                <p className="text-xs text-muted leading-relaxed">
+                  Escaneie o QR Code ou copie o código acima e cole no app do seu banco.
+                  Seus <strong className="text-foreground">{selectedPlan.credits} créditos</strong> serão
+                  adicionados automaticamente após a confirmação do pagamento.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
