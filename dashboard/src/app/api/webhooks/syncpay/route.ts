@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     // Se pagamento confirmado, adicionar créditos
     if (status && isPaidStatus(status)) {
       // Atualizar transação como completed
-      await supabase
+      const { error: updateError } = await supabase
         .from("transactions")
         .update({
           status: "completed",
@@ -84,6 +84,12 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", transaction.id);
+
+      if (updateError) {
+        console.error(`ERRO ao atualizar status da transação ${transaction.id}:`, updateError);
+      } else {
+        console.log(`Transação ${transaction.id} atualizada para completed`);
+      }
 
       // Adicionar créditos
       const { data: profile } = await supabase
