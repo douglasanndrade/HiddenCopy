@@ -34,7 +34,7 @@ export default function Home() {
           Bem-vindo ao <span className="text-gradient">HiddenCopy</span>
         </h1>
         <p className="text-muted text-base sm:text-lg animate-fade-in delay-1">
-          Melhore e mescle os audios dos seus criativos em segundos.
+          Camufle os áudios dos seus criativos em segundos.
         </p>
       </div>
 
@@ -50,13 +50,13 @@ export default function Home() {
               <Zap size={20} className="text-white" />
             </div>
             <span className="text-sm text-muted font-medium">
-              Creditos Disponiveis
+              Créditos Disponíveis
             </span>
           </div>
           <p className="text-3xl sm:text-4xl font-bold text-gradient">
             {credits}
           </p>
-          <p className="text-xs text-muted mt-1.5">creditos restantes</p>
+          <p className="text-xs text-muted mt-1.5">créditos restantes</p>
         </div>
 
         <div className="glass-card rounded-2xl p-5 sm:p-6 animate-fade-in-up delay-2 transition-all duration-300 hover:scale-[1.02] hover:border-accent/50">
@@ -65,13 +65,13 @@ export default function Home() {
               <Music size={20} className="text-white" />
             </div>
             <span className="text-sm text-muted font-medium">
-              Audios Melhorados
+              Vídeos Camuflados
             </span>
           </div>
           <p className="text-3xl sm:text-4xl font-bold text-white">
             {melhorados}
           </p>
-          <p className="text-xs text-muted mt-1.5">este mes</p>
+          <p className="text-xs text-muted mt-1.5">este mês</p>
         </div>
 
         <div className="glass-card rounded-2xl p-5 sm:p-6 animate-fade-in-up delay-3 transition-all duration-300 hover:scale-[1.02] hover:border-accent/50">
@@ -80,13 +80,13 @@ export default function Home() {
               <Merge size={20} className="text-white" />
             </div>
             <span className="text-sm text-muted font-medium">
-              Audios Mesclados
+              Vídeo + Áudio
             </span>
           </div>
           <p className="text-3xl sm:text-4xl font-bold text-white">
             {mesclados}
           </p>
-          <p className="text-xs text-muted mt-1.5">este mes</p>
+          <p className="text-xs text-muted mt-1.5">este mês</p>
         </div>
       </div>
 
@@ -100,11 +100,11 @@ export default function Home() {
                   <Music size={26} className="text-white" />
                 </div>
                 <h3 className="text-lg font-bold mb-2 text-foreground">
-                  Melhorar Audio
+                  Camuflar Vídeo
                 </h3>
                 <p className="text-muted text-sm leading-relaxed">
-                  Envie um MP4 e receba com audio normalizado, equalizado e sem
-                  ruido. Ideal para criativos com audio fraco ou com barulho.
+                  Envie um MP4 e receba com áudio camuflado de forma profissional.
+                  Ideal para criativos que precisam passar despercebidos.
                 </p>
               </div>
               <ChevronRight
@@ -123,11 +123,11 @@ export default function Home() {
                   <Merge size={26} className="text-white" />
                 </div>
                 <h3 className="text-lg font-bold mb-2 text-foreground">
-                  Mesclar com Musica
+                  Camuflar Vídeo + Áudio
                 </h3>
                 <p className="text-muted text-sm leading-relaxed">
-                  Envie um MP4 + um MP3 e receba o video com a musica de fundo
-                  mesclada. Ducking automatico quando tem voz.
+                  Envie um MP4 + um MP3 e receba o vídeo com a música de fundo
+                  mesclada. Ducking automático quando tem voz.
                 </p>
               </div>
               <ChevronRight
