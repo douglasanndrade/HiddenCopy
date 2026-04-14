@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
 import {
   Upload,
   Music,
-  Merge,
   Download,
   Loader2,
   CheckCircle,
@@ -52,12 +50,14 @@ const progressSteps = [
 
 function DropZone({
   label,
+  sublabel,
   accept,
   file,
   onFile,
   icon,
 }: {
   label: string;
+  sublabel?: string;
   accept: string;
   file: File | null;
   onFile: (f: File | null) => void;
@@ -138,6 +138,7 @@ function DropZone({
           <div className="animate-float">{icon}</div>
           <div>
             <p className="text-sm font-semibold text-foreground/80">{label}</p>
+            {sublabel && <p className="text-xs mt-0.5 text-accent/70">{sublabel}</p>}
             <p className="text-xs mt-1 text-muted">
               Arraste ou clique para selecionar
             </p>
@@ -151,14 +152,12 @@ function DropZone({
 /* ─── Main Page ─── */
 
 export default function Laboratorio() {
-  const searchParams = useSearchParams();
   const { session, credits, refreshCredits } = useAuth();
-  const initialMode = (searchParams.get("modo") as Modo) || "melhorar";
 
-  const [modo, setModo] = useState<Modo>(initialMode);
+  const modo: Modo = "mesclar";
+  const musicVolume = -10;
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [musicFile, setMusicFile] = useState<File | null>(null);
-  const [musicVolume, setMusicVolume] = useState(-10);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState("");
   const [progressPercent, setProgressPercent] = useState(0);
@@ -258,14 +257,6 @@ export default function Laboratorio() {
     }
   };
 
-  const resetForm = () => {
-    setVideoFile(null);
-    setMusicFile(null);
-    setDownloadUrl(null);
-    setError(null);
-    setProgress("");
-  };
-
   const isComplete = progressPercent === 100 && !!downloadUrl;
 
   return (
@@ -280,40 +271,8 @@ export default function Laboratorio() {
         </p>
       </div>
 
-      {/* Mode selector */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 animate-fade-in delay-1">
-        <button
-          onClick={() => {
-            setModo("melhorar");
-            resetForm();
-          }}
-          className={`flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
-            modo === "melhorar"
-              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent shadow-lg"
-              : "glass-card text-muted hover:border-accent/50 hover:text-foreground"
-          }`}
-        >
-          <Music size={18} />
-          Camuflar Video
-        </button>
-        <button
-          onClick={() => {
-            setModo("mesclar");
-            resetForm();
-          }}
-          className={`flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
-            modo === "mesclar"
-              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent shadow-lg"
-              : "glass-card text-muted hover:border-accent/50 hover:text-foreground"
-          }`}
-        >
-          <Merge size={18} />
-          Camuflar Video + Áudio
-        </button>
-      </div>
-
       {/* Upload sections */}
-      <div className="space-y-6 animate-fade-in-up delay-2">
+      <div className="space-y-6 animate-fade-in-up delay-1">
         <DropZone
           label="Vídeo MP4"
           accept="video/mp4"
@@ -322,38 +281,14 @@ export default function Laboratorio() {
           icon={<Upload size={40} className="text-muted" />}
         />
 
-        {modo === "mesclar" && (
-          <>
-            <DropZone
-              label="Música MP3"
-              accept="audio/mpeg"
-              file={musicFile}
-              onFile={setMusicFile}
-              icon={<Music size={40} className="text-muted" />}
-            />
-
-            {/* Volume slider */}
-            <div className="glass-card rounded-xl p-5 space-y-3">
-              <label className="text-sm font-semibold text-foreground block">
-                Volume da música:{" "}
-                <span className="text-accent">{musicVolume} dB</span>
-              </label>
-              <input
-                type="range"
-                min={-20}
-                max={-3}
-                value={musicVolume}
-                onChange={(e) => setMusicVolume(Number(e.target.value))}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted">
-                <span>Bem baixa (-20)</span>
-                <span>Média (-10)</span>
-                <span>Alta (-3)</span>
-              </div>
-            </div>
-          </>
-        )}
+        <DropZone
+          label="Áudio White MP3"
+          sublabel="Aqui vai sua copy white"
+          accept="audio/mpeg"
+          file={musicFile}
+          onFile={setMusicFile}
+          icon={<Music size={40} className="text-muted" />}
+        />
 
         {/* Error */}
         {error && (

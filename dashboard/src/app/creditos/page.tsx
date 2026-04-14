@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Zap, Star, Crown, Loader2, Copy, CheckCircle, X, Sparkles } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Check, Zap, Star, Crown, Loader2, Copy, CheckCircle, X, Sparkles, PartyPopper } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { QRCode } from "react-qrcode-logo";
 
@@ -105,6 +105,18 @@ export default function Creditos() {
   const [cpf, setCpf] = useState("");
   const [phone, setPhone] = useState("");
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const prevCredits = useRef(credits);
+
+  // Detectar quando créditos aumentam (pagamento aprovado)
+  useEffect(() => {
+    if (credits > prevCredits.current && prevCredits.current >= 0 && showPixModal) {
+      setShowSuccess(true);
+      setShowPixModal(false);
+      setTimeout(() => setShowSuccess(false), 8000);
+    }
+    prevCredits.current = credits;
+  }, [credits, showPixModal]);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -452,6 +464,49 @@ export default function Creditos() {
                   Seus <strong className="text-foreground">{selectedPlan.credits} créditos</strong> serão
                   adicionados automaticamente após a confirmação do pagamento.
                 </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Pagamento Aprovado */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+          <div className="glass-card animate-scale-in border border-success/30 rounded-3xl p-8 sm:p-12 max-w-md w-full mx-4 shadow-2xl text-center relative overflow-hidden">
+            {/* Glow background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-success/10 via-transparent to-accent/5 pointer-events-none" />
+
+            <div className="relative">
+              {/* Icon */}
+              <div className="w-20 h-20 rounded-full bg-success/15 flex items-center justify-center mx-auto mb-6 animate-scale-in glow-success">
+                <PartyPopper size={40} className="text-success animate-float" />
+              </div>
+
+              {/* Title */}
+              <h2 className="text-2xl sm:text-3xl font-extrabold mb-3 animate-fade-in-up delay-1">
+                Pagamento <span className="text-success">Aprovado!</span>
+              </h2>
+
+              {/* Message */}
+              <p className="text-muted text-sm sm:text-base mb-6 animate-fade-in-up delay-2">
+                Seus créditos já foram adicionados à sua conta. Agora você pode processar seus criativos!
+              </p>
+
+              {/* Credits badge */}
+              <div className="inline-flex items-center gap-2 bg-success/15 border border-success/30 rounded-full px-6 py-3 mb-8 animate-fade-in-up delay-3">
+                <Sparkles size={18} className="text-success" />
+                <span className="text-lg font-bold text-success">{credits} créditos</span>
+                <span className="text-sm text-muted">disponíveis</span>
+              </div>
+
+              {/* Button */}
+              <div className="animate-fade-in-up delay-4">
+                <button
+                  onClick={() => setShowSuccess(false)}
+                  className="w-full py-4 bg-gradient-to-r from-success to-emerald-500 text-white rounded-xl font-bold text-sm btn-glow glow-success hover:opacity-90 transition-all"
+                >
+                  Continuar
+                </button>
               </div>
             </div>
           </div>

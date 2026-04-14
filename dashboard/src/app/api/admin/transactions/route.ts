@@ -27,26 +27,35 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // Buscar todas as transações com dados do usuário
   const { data: transactions, error } = await supabase
     .from("transactions")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(500);
 
   if (error) {
+    console.error("Transactions fetch error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  if (!transactions?.length) {
+    return NextResponse.json({ transactions: [] });
+  }
+
   // Buscar profiles para associar emails
-  const userIds = [...new Set(transactions?.map((t) => t.user_id) || [])];
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, email, name")
-    .in("id", userIds);
+  const userIds = [...new Set(transactions.map((t) => t.user_id))];
 
-  const profileMap = new Map(profiles?.map((p) => [p.id, p]) || []);
+  let profileMap = new Map();
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, email, name")
+      .in("id", userIds);
 
-  const enriched = (transactions || []).map((t) => ({
+    profileMap = new Map(profiles?.map((p) => [p.id, p]) || []);
+  }
+
+  const enriched = transactions.map((t) => ({
     ...t,
     user_email: profileMap.get(t.user_id)?.email || "—",
     user_name: profileMap.get(t.user_id)?.name || "—",
