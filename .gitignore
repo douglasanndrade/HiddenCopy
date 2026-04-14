@@ -1,0 +1,8 @@
+node_modules
+.next
+.env.local
+ffmpeg_temp
+*.pyc
+__pycache__
+dashboard/public/uploads/*
+!dashboard/public/uploads/.gitkeep

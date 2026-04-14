@@ -1,0 +1,8 @@
+node_modules
+.next
+ffmpeg_temp
+dashboard/node_modules
+dashboard/.next
+dashboard/.env.local
+*.pyc
+__pycache__
