@@ -57,7 +57,7 @@ export default function LoginPage() {
         });
         if (error) throw error;
       }
-      router.push("/");
+      router.push("/dashboard");
     } catch (err) {
       setError(traduzirErro(err));
     } finally {

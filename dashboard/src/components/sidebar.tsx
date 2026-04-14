@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useState, useEffect } from "react";
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/dashboard", label: "Home", icon: Home },
   { href: "/laboratorio", label: "Laboratório", icon: FlaskConical },
   { href: "/creditos", label: "Créditos", icon: CreditCard },
   { href: "/conta", label: "Minha Conta", icon: User },

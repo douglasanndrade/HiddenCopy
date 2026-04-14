@@ -10,13 +10,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const isLoginPage = pathname === "/login";
+  const isPublicPage = pathname === "/login" || pathname === "/";
 
   useEffect(() => {
-    if (!loading && !user && !isLoginPage) {
+    if (!loading && !user && !isPublicPage) {
       router.push("/login");
     }
-  }, [user, loading, isLoginPage, router]);
+  }, [user, loading, isPublicPage, router]);
 
   if (loading) {
     return (
@@ -40,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (isLoginPage) {
+  if (isPublicPage) {
     return <div className="w-full">{children}</div>;
   }
 
