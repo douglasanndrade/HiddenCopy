@@ -1,7 +1,31 @@
+"use client";
+
 import { FlaskConical, Music, Merge, Zap } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
+import { useEffect, useState } from "react";
 
 export default function Home() {
+  const { credits, session } = useAuth();
+  const [melhorados, setMelhorados] = useState(0);
+  const [mesclados, setMesclados] = useState(0);
+
+  useEffect(() => {
+    if (!session) return;
+
+    fetch("/api/stats", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setMelhorados(data.melhorados || 0);
+          setMesclados(data.mesclados || 0);
+        }
+      })
+      .catch(() => {});
+  }, [session]);
+
   return (
     <div className="p-8">
       <div className="mb-10">
@@ -17,19 +41,19 @@ export default function Home() {
         <StatCard
           icon={<Zap size={24} />}
           title="Créditos Disponíveis"
-          value="5"
-          subtitle="de 5 créditos"
+          value={String(credits)}
+          subtitle="créditos restantes"
         />
         <StatCard
           icon={<Music size={24} />}
           title="Áudios Melhorados"
-          value="0"
+          value={String(melhorados)}
           subtitle="este mês"
         />
         <StatCard
           icon={<Merge size={24} />}
           title="Áudios Mesclados"
-          value="0"
+          value={String(mesclados)}
           subtitle="este mês"
         />
       </div>

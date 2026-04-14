@@ -1,11 +1,22 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Upload, Music, Merge, Download, Loader2, CheckCircle, X } from "lucide-react";
+import { Upload, Music, Merge, Download, Loader2, CheckCircle, X, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 type Modo = "melhorar" | "mesclar";
+
+const progressSteps = [
+  { at: 0, label: "Enviando arquivos..." },
+  { at: 8, label: "Analisando áudio do vídeo..." },
+  { at: 20, label: "Extraindo faixas de áudio..." },
+  { at: 35, label: "Aplicando filtros de camuflagem..." },
+  { at: 55, label: "Processando frequências..." },
+  { at: 70, label: "Remasterizando áudio..." },
+  { at: 85, label: "Renderizando vídeo final..." },
+  { at: 95, label: "Finalizando..." },
+];
 
 export default function Laboratorio() {
   const searchParams = useSearchParams();
@@ -18,8 +29,50 @@ export default function Laboratorio() {
   const [musicVolume, setMusicVolume] = useState(-10);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState("");
+  const [progressPercent, setProgressPercent] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Limpar intervalo ao desmontar
+  useEffect(() => {
+    return () => {
+      if (progressInterval.current) clearInterval(progressInterval.current);
+    };
+  }, []);
+
+  const startProgressSimulation = (fileSizeMB: number) => {
+    // Estima duração baseado no tamanho (maior arquivo = mais tempo)
+    const estimatedSeconds = Math.max(15, Math.min(fileSizeMB * 1.5, 120));
+    const stepDuration = (estimatedSeconds * 1000) / 100;
+    let currentPercent = 0;
+
+    setProgressPercent(0);
+    setProgress(progressSteps[0].label);
+
+    progressInterval.current = setInterval(() => {
+      currentPercent += 1;
+
+      if (currentPercent >= 95) {
+        // Para em 95% e espera a resposta real
+        if (progressInterval.current) clearInterval(progressInterval.current);
+        return;
+      }
+
+      setProgressPercent(currentPercent);
+
+      // Atualiza a mensagem baseado no passo atual
+      const step = [...progressSteps].reverse().find(s => currentPercent >= s.at);
+      if (step) setProgress(step.label);
+    }, stepDuration);
+  };
+
+  const stopProgressSimulation = () => {
+    if (progressInterval.current) {
+      clearInterval(progressInterval.current);
+      progressInterval.current = null;
+    }
+  };
 
   const handleProcess = async () => {
     if (!videoFile) return;
@@ -32,9 +85,11 @@ export default function Laboratorio() {
     }
 
     setProcessing(true);
-    setProgress("Enviando arquivos...");
     setError(null);
     setDownloadUrl(null);
+
+    const fileSizeMB = videoFile.size / 1024 / 1024;
+    startProgressSimulation(fileSizeMB);
 
     try {
       const formData = new FormData();
@@ -44,8 +99,6 @@ export default function Laboratorio() {
         formData.append("music", musicFile);
         formData.append("volume", musicVolume.toString());
       }
-
-      setProgress("Processando áudio...");
 
       const res = await fetch("/api/process", {
         method: "POST",
@@ -58,14 +111,19 @@ export default function Laboratorio() {
         throw new Error(data.error || "Erro ao processar");
       }
 
+      stopProgressSimulation();
+      setProgressPercent(100);
+      setProgress("Concluído!");
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
-      setProgress("Concluído!");
       await refreshCredits();
     } catch (err) {
+      stopProgressSimulation();
       setError(err instanceof Error ? err.message : "Erro desconhecido");
       setProgress("");
+      setProgressPercent(0);
     } finally {
       setProcessing(false);
     }
@@ -161,13 +219,26 @@ export default function Laboratorio() {
         )}
 
         {progress && !error && (
-          <div className="bg-accent-soft border border-accent/20 rounded-xl p-4 flex items-center gap-3">
-            {downloadUrl ? (
-              <CheckCircle size={20} className="text-success" />
-            ) : (
-              <Loader2 size={20} className="text-accent animate-spin" />
+          <div className="bg-accent-soft border border-accent/20 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              {downloadUrl ? (
+                <CheckCircle size={20} className="text-success" />
+              ) : (
+                <Loader2 size={20} className="text-accent animate-spin" />
+              )}
+              <span className="text-sm">{progress}</span>
+              {!downloadUrl && (
+                <span className="text-xs text-muted ml-auto">{progressPercent}%</span>
+              )}
+            </div>
+            {!downloadUrl && (
+              <div className="w-full bg-background rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-full bg-accent rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
             )}
-            <span className="text-sm">{progress}</span>
           </div>
         )}
 
@@ -196,6 +267,18 @@ export default function Laboratorio() {
             </a>
           )}
         </div>
+
+        {downloadUrl && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-start gap-3 mt-4">
+            <AlertTriangle size={20} className="text-yellow-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-yellow-400">Baixe seu vídeo agora!</p>
+              <p className="text-xs text-muted mt-1">
+                Nenhuma mídia fica salva em nossos servidores. Após sair desta página, o arquivo não estará mais disponível.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
