@@ -108,7 +108,7 @@ export default function Laboratorio() {
           }`}
         >
           <Merge size={18} />
-          Mesclar Video + Música
+          Camuflar Video + Áudio
         </button>
       </div>
 
