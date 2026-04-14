@@ -71,12 +71,19 @@ export default function AdminPage() {
     setLoading(false);
   };
 
+  const fetchPlans = async () => {
+    try {
+      const res = await fetch("/api/plans");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.plans?.length) setPlans(data.plans);
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     fetchUsers();
-    const saved = localStorage.getItem("hiddencopy_plans");
-    if (saved) {
-      try { setPlans(JSON.parse(saved)); } catch {}
-    }
+    fetchPlans();
   }, [session]);
 
   const adjustCredits = async (userId: string, action: "add" | "set") => {
@@ -98,10 +105,26 @@ export default function AdminPage() {
     setAdjusting(null);
   };
 
-  const savePlans = () => {
-    localStorage.setItem("hiddencopy_plans", JSON.stringify(plans));
-    setPlansSaved(true);
-    setTimeout(() => setPlansSaved(false), 2000);
+  const [plansSaving, setPlansSaving] = useState(false);
+
+  const savePlans = async () => {
+    if (!session) return;
+    setPlansSaving(true);
+    try {
+      const res = await fetch("/api/plans", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ plans }),
+      });
+      if (res.ok) {
+        setPlansSaved(true);
+        setTimeout(() => setPlansSaved(false), 2000);
+      }
+    } catch {}
+    setPlansSaving(false);
   };
 
   const updatePlan = (idx: number, field: keyof Plan, value: string | number | boolean) => {
@@ -132,16 +155,16 @@ export default function AdminPage() {
   );
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="flex items-center justify-between mb-6 sm:mb-8">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Painel Admin</h1>
-          <p className="text-muted">Gerencie usuários, créditos e planos.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Painel Admin</h1>
+          <p className="text-muted text-sm sm:text-base">Gerencie usuários, créditos e planos.</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-8">
+      <div className="flex gap-2 mb-6 sm:mb-8">
         <button
           onClick={() => setTab("users")}
           className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all ${
@@ -188,8 +211,8 @@ export default function AdminPage() {
               Carregando...
             </div>
           ) : (
-            <div className="bg-card border border-border rounded-2xl overflow-hidden">
-              <table className="w-full">
+            <div className="bg-card border border-border rounded-2xl overflow-x-auto">
+              <table className="w-full min-w-[640px]">
                 <thead>
                   <tr className="border-b border-border bg-card-hover">
                     <th className="text-left text-xs text-muted font-medium px-6 py-4">Usuário</th>
@@ -270,18 +293,24 @@ export default function AdminPage() {
       {/* Tab Planos */}
       {tab === "plans" && (
         <>
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
             <p className="text-sm text-muted">
-              Edite os planos abaixo. As mudanças ficam salvas no navegador e afetam a página de créditos.
+              Edite os planos abaixo. As mudanças são salvas no servidor e afetam todos os usuários.
             </p>
             <button
               onClick={savePlans}
-              className="flex items-center gap-2 px-5 py-3 bg-accent text-white rounded-xl text-sm font-medium hover:bg-accent-hover transition-all"
+              disabled={plansSaving}
+              className="flex items-center gap-2 px-5 py-3 bg-accent text-white rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-50"
             >
               {plansSaved ? (
                 <>
                   <CheckCircle size={16} />
                   Salvo!
+                </>
+              ) : plansSaving ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Salvando...
                 </>
               ) : (
                 <>
@@ -292,7 +321,7 @@ export default function AdminPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {plans.map((plan, idx) => (
               <div
                 key={plan.id}

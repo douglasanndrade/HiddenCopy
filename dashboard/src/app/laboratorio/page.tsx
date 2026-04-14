@@ -2,8 +2,38 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Upload, Music, Merge, Download, Loader2, CheckCircle, X, AlertTriangle } from "lucide-react";
+import {
+  Upload,
+  Music,
+  Merge,
+  Download,
+  Loader2,
+  CheckCircle,
+  X,
+  AlertTriangle,
+  FileVideo,
+  FileAudio,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+
+const errosMap: Record<string, string> = {
+  "Failed to fetch": "Erro de conexão. Verifique sua internet",
+  "fetch failed": "Erro de conexão. Verifique sua internet",
+  "Network request failed": "Erro de conexão. Verifique sua internet",
+  "Load failed": "Erro de conexão. Verifique sua internet",
+  "Não autenticado": "Sessão expirada. Faça login novamente",
+  "Créditos insuficientes": "Créditos insuficientes. Adquira mais créditos",
+  "Request Entity Too Large": "Arquivo muito grande. Tente um menor",
+  "Payload Too Large": "Arquivo muito grande. Tente um menor",
+};
+
+function traduzirErro(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  for (const [en, pt] of Object.entries(errosMap)) {
+    if (msg.toLowerCase().includes(en.toLowerCase())) return pt;
+  }
+  return msg;
+}
 
 type Modo = "melhorar" | "mesclar";
 
@@ -17,6 +47,108 @@ const progressSteps = [
   { at: 85, label: "Renderizando vídeo final..." },
   { at: 95, label: "Finalizando..." },
 ];
+
+/* ─── DropZone Sub-component ─── */
+
+function DropZone({
+  label,
+  accept,
+  file,
+  onFile,
+  icon,
+}: {
+  label: string;
+  accept: string;
+  file: File | null;
+  onFile: (f: File | null) => void;
+  icon: React.ReactNode;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile) onFile(droppedFile);
+    },
+    [onFile]
+  );
+
+  const formatSize = (bytes: number) => {
+    const mb = bytes / 1024 / 1024;
+    return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
+  };
+
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      className={`relative glass-card border-2 border-dashed rounded-xl p-6 sm:p-10 text-center transition-all duration-300 cursor-pointer ${
+        dragOver
+          ? "animate-border-glow bg-accent-soft border-accent"
+          : file
+          ? "border-success/50 glow-success"
+          : "border-border hover:border-accent/40"
+      }`}
+    >
+      <input
+        type="file"
+        accept={accept}
+        onChange={(e) => onFile(e.target.files?.[0] || null)}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+      />
+
+      {file ? (
+        <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-success/10 shrink-0">
+            {accept.includes("video") ? (
+              <FileVideo size={24} className="text-success" />
+            ) : (
+              <FileAudio size={24} className="text-success" />
+            )}
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate max-w-[200px] sm:max-w-[300px]">
+              {file.name}
+            </p>
+            <span className="inline-block mt-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-success/10 text-success">
+              {formatSize(file.size)}
+            </span>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onFile(null);
+            }}
+            className="relative z-20 ml-auto p-2 rounded-lg bg-card hover:bg-red-500/15 transition-all group"
+          >
+            <X
+              size={16}
+              className="text-muted group-hover:text-red-400 transition-colors"
+            />
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-4 text-muted">
+          <div className="animate-float">{icon}</div>
+          <div>
+            <p className="text-sm font-semibold text-foreground/80">{label}</p>
+            <p className="text-xs mt-1 text-muted">
+              Arraste ou clique para selecionar
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Main Page ─── */
 
 export default function Laboratorio() {
   const searchParams = useSearchParams();
@@ -42,7 +174,6 @@ export default function Laboratorio() {
   }, []);
 
   const startProgressSimulation = (fileSizeMB: number) => {
-    // Estima duração baseado no tamanho (maior arquivo = mais tempo)
     const estimatedSeconds = Math.max(15, Math.min(fileSizeMB * 1.5, 120));
     const stepDuration = (estimatedSeconds * 1000) / 100;
     let currentPercent = 0;
@@ -54,15 +185,13 @@ export default function Laboratorio() {
       currentPercent += 1;
 
       if (currentPercent >= 95) {
-        // Para em 95% e espera a resposta real
         if (progressInterval.current) clearInterval(progressInterval.current);
         return;
       }
 
       setProgressPercent(currentPercent);
 
-      // Atualiza a mensagem baseado no passo atual
-      const step = [...progressSteps].reverse().find(s => currentPercent >= s.at);
+      const step = [...progressSteps].reverse().find((s) => currentPercent >= s.at);
       if (step) setProgress(step.label);
     }, stepDuration);
   };
@@ -108,7 +237,7 @@ export default function Laboratorio() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Erro ao processar");
+        throw new Error(data.error || "Erro ao processar. Tente novamente");
       }
 
       stopProgressSimulation();
@@ -121,7 +250,7 @@ export default function Laboratorio() {
       await refreshCredits();
     } catch (err) {
       stopProgressSimulation();
-      setError(err instanceof Error ? err.message : "Erro desconhecido");
+      setError(traduzirErro(err));
       setProgress("");
       setProgressPercent(0);
     } finally {
@@ -137,32 +266,45 @@ export default function Laboratorio() {
     setProgress("");
   };
 
-  return (
-    <div className="p-8 max-w-3xl">
-      <h1 className="text-3xl font-bold mb-2">Laboratório</h1>
-      <p className="text-muted mb-8">
-        Camufle o áudio do seu vídeo de forma discreta e profissional.
-      </p>
+  const isComplete = progressPercent === 100 && !!downloadUrl;
 
-      {/* Seletor de modo */}
-      <div className="flex gap-3 mb-8">
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl space-y-8">
+      {/* Header */}
+      <div className="animate-fade-in">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gradient">
+          Laboratório
+        </h1>
+        <p className="text-muted mt-2 text-sm sm:text-base">
+          Camufle o áudio do seu vídeo de forma discreta e profissional.
+        </p>
+      </div>
+
+      {/* Mode selector */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 animate-fade-in delay-1">
         <button
-          onClick={() => { setModo("melhorar"); resetForm(); }}
-          className={`flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-medium transition-all ${
+          onClick={() => {
+            setModo("melhorar");
+            resetForm();
+          }}
+          className={`flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
             modo === "melhorar"
-              ? "bg-accent text-white"
-              : "bg-card border border-border text-muted hover:text-foreground"
+              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent shadow-lg"
+              : "glass-card text-muted hover:border-accent/50 hover:text-foreground"
           }`}
         >
           <Music size={18} />
           Camuflar Video
         </button>
         <button
-          onClick={() => { setModo("mesclar"); resetForm(); }}
-          className={`flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-medium transition-all ${
+          onClick={() => {
+            setModo("mesclar");
+            resetForm();
+          }}
+          className={`flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
             modo === "mesclar"
-              ? "bg-accent text-white"
-              : "bg-card border border-border text-muted hover:text-foreground"
+              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent shadow-lg"
+              : "glass-card text-muted hover:border-accent/50 hover:text-foreground"
           }`}
         >
           <Merge size={18} />
@@ -170,14 +312,14 @@ export default function Laboratorio() {
         </button>
       </div>
 
-      {/* Upload de vídeo */}
-      <div className="space-y-6">
+      {/* Upload sections */}
+      <div className="space-y-6 animate-fade-in-up delay-2">
         <DropZone
           label="Vídeo MP4"
           accept="video/mp4"
           file={videoFile}
           onFile={setVideoFile}
-          icon={<Upload size={32} />}
+          icon={<Upload size={40} className="text-muted" />}
         />
 
         {modo === "mesclar" && (
@@ -187,12 +329,14 @@ export default function Laboratorio() {
               accept="audio/mpeg"
               file={musicFile}
               onFile={setMusicFile}
-              icon={<Music size={32} />}
+              icon={<Music size={40} className="text-muted" />}
             />
 
-            <div className="bg-card border border-border rounded-xl p-5">
-              <label className="text-sm font-medium mb-3 block">
-                Volume da música: {musicVolume} dB
+            {/* Volume slider */}
+            <div className="glass-card rounded-xl p-5 space-y-3">
+              <label className="text-sm font-semibold text-foreground block">
+                Volume da música:{" "}
+                <span className="text-accent">{musicVolume} dB</span>
               </label>
               <input
                 type="range"
@@ -200,9 +344,9 @@ export default function Laboratorio() {
                 max={-3}
                 value={musicVolume}
                 onChange={(e) => setMusicVolume(Number(e.target.value))}
-                className="w-full accent-accent"
+                className="w-full"
               />
-              <div className="flex justify-between text-xs text-muted mt-1">
+              <div className="flex justify-between text-xs text-muted">
                 <span>Bem baixa (-20)</span>
                 <span>Média (-10)</span>
                 <span>Alta (-3)</span>
@@ -211,42 +355,61 @@ export default function Laboratorio() {
           </>
         )}
 
+        {/* Error */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3">
-            <X size={20} className="text-red-500" />
+          <div className="glass-card rounded-xl p-4 flex items-center gap-3 border-l-2 border-red-500/70 animate-fade-in">
+            <X size={20} className="text-red-400 shrink-0" />
             <span className="text-red-400 text-sm">{error}</span>
           </div>
         )}
 
+        {/* Progress */}
         {progress && !error && (
-          <div className="bg-accent-soft border border-accent/20 rounded-xl p-4 space-y-3">
+          <div
+            className={`glass-card rounded-xl p-5 space-y-4 transition-all duration-500 ${
+              isComplete
+                ? "border-l-2 border-success glow-success"
+                : "border-l-2 border-accent"
+            }`}
+          >
             <div className="flex items-center gap-3">
-              {downloadUrl ? (
-                <CheckCircle size={20} className="text-success" />
+              {isComplete ? (
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-success/15 animate-scale-in">
+                  <CheckCircle size={18} className="text-success" />
+                </div>
               ) : (
-                <Loader2 size={20} className="text-accent animate-spin" />
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent-soft">
+                  <Loader2 size={18} className="text-accent animate-spin" />
+                </div>
               )}
-              <span className="text-sm">{progress}</span>
-              {!downloadUrl && (
-                <span className="text-xs text-muted ml-auto">{progressPercent}%</span>
+              <span className="text-sm font-medium text-foreground">
+                {progress}
+              </span>
+              {!isComplete && (
+                <span className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-full bg-accent-soft text-accent">
+                  {progressPercent}%
+                </span>
               )}
             </div>
-            {!downloadUrl && (
-              <div className="w-full bg-background rounded-full h-2 overflow-hidden">
+            {!isComplete && (
+              <div className="w-full bg-background rounded-full h-2.5 overflow-hidden">
                 <div
-                  className="h-full bg-accent rounded-full transition-all duration-500 ease-out"
+                  className="h-full rounded-full bg-gradient-to-r from-accent to-accent-hover transition-all duration-500 ease-out relative overflow-hidden"
                   style={{ width: `${progressPercent}%` }}
-                />
+                >
+                  <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                </div>
               </div>
             )}
           </div>
         )}
 
-        <div className="flex gap-3">
+        {/* Action buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up delay-3">
           <button
             onClick={handleProcess}
             disabled={processing || !videoFile || (modo === "mesclar" && !musicFile)}
-            className="flex items-center gap-2 px-6 py-3 bg-accent text-white rounded-lg font-medium text-sm hover:bg-accent-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2.5 px-8 py-3.5 bg-gradient-to-r from-accent to-accent-hover text-white rounded-xl font-semibold text-sm btn-glow hover:glow-accent transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
           >
             {processing ? (
               <Loader2 size={18} className="animate-spin" />
@@ -260,7 +423,7 @@ export default function Laboratorio() {
             <a
               href={downloadUrl}
               download={`hiddencopy_${modo}_${Date.now()}.mp4`}
-              className="flex items-center gap-2 px-6 py-3 bg-success text-white rounded-lg font-medium text-sm hover:opacity-90 transition-all"
+              className="flex items-center justify-center gap-2.5 px-8 py-3.5 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-xl font-semibold text-sm btn-glow glow-success hover:opacity-90 transition-all duration-300 animate-scale-in"
             >
               <Download size={18} />
               Baixar Resultado
@@ -268,92 +431,27 @@ export default function Laboratorio() {
           )}
         </div>
 
+        {/* Warning box */}
         {downloadUrl && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-start gap-3 mt-4">
-            <AlertTriangle size={20} className="text-yellow-500 shrink-0 mt-0.5" />
+          <div className="glass-card rounded-xl p-5 flex items-start gap-4 border-l-2 border-yellow-500/70 animate-fade-in-up delay-4">
+            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-yellow-500/10 shrink-0">
+              <AlertTriangle
+                size={20}
+                className="text-yellow-500 animate-pulse-glow"
+              />
+            </div>
             <div>
-              <p className="text-sm font-medium text-yellow-400">Baixe seu vídeo agora!</p>
-              <p className="text-xs text-muted mt-1">
-                Nenhuma mídia fica salva em nossos servidores. Após sair desta página, o arquivo não estará mais disponível.
+              <p className="text-sm font-semibold text-yellow-400">
+                Baixe seu vídeo agora!
+              </p>
+              <p className="text-xs text-muted mt-1.5 leading-relaxed">
+                Nenhuma mídia fica salva em nossos servidores. Após sair desta
+                página, o arquivo não estará mais disponível.
               </p>
             </div>
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function DropZone({
-  label,
-  accept,
-  file,
-  onFile,
-  icon,
-}: {
-  label: string;
-  accept: string;
-  file: File | null;
-  onFile: (f: File | null) => void;
-  icon: React.ReactNode;
-}) {
-  const [dragOver, setDragOver] = useState(false);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile) onFile(droppedFile);
-    },
-    [onFile]
-  );
-
-  return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-      className={`relative bg-card border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
-        dragOver
-          ? "border-accent bg-accent-soft"
-          : file
-          ? "border-success/50"
-          : "border-border hover:border-muted"
-      }`}
-    >
-      <input
-        type="file"
-        accept={accept}
-        onChange={(e) => onFile(e.target.files?.[0] || null)}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-      />
-
-      {file ? (
-        <div className="flex items-center justify-center gap-3">
-          <CheckCircle size={24} className="text-success" />
-          <div className="text-left">
-            <p className="text-sm font-medium">{file.name}</p>
-            <p className="text-xs text-muted">
-              {(file.size / 1024 / 1024).toFixed(1)} MB
-            </p>
-          </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); onFile(null); }}
-            className="ml-4 p-1 hover:bg-card-hover rounded"
-          >
-            <X size={16} className="text-muted" />
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-3 text-muted">
-          {icon}
-          <div>
-            <p className="text-sm font-medium">{label}</p>
-            <p className="text-xs">Arraste ou clique para selecionar</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

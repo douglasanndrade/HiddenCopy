@@ -69,6 +69,29 @@ const iconMap: Record<string, React.ReactNode> = {
   crown: <Crown size={28} />,
 };
 
+const tierGradients: Record<string, string> = {
+  zap: "from-blue-500 to-cyan-400",
+  star: "from-accent to-yellow-400",
+  crown: "from-purple-500 to-pink-500",
+};
+
+const errosMap: Record<string, string> = {
+  "Failed to fetch": "Erro de conexão. Verifique sua internet",
+  "fetch failed": "Erro de conexão. Verifique sua internet",
+  "Network request failed": "Erro de conexão. Verifique sua internet",
+  "Não autenticado": "Sessão expirada. Faça login novamente",
+  "Plano inválido": "Plano não encontrado. Recarregue a página",
+  "Load failed": "Erro de conexão. Verifique sua internet",
+};
+
+function traduzirErro(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  for (const [en, pt] of Object.entries(errosMap)) {
+    if (msg.toLowerCase().includes(en.toLowerCase())) return pt;
+  }
+  return msg;
+}
+
 export default function Creditos() {
   const { credits, session, refreshCredits } = useAuth();
   const [plans, setPlans] = useState<Plan[]>(defaultPlans);
@@ -84,13 +107,16 @@ export default function Creditos() {
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
 
   useEffect(() => {
-    // Carregar planos do localStorage (admin pode ter editado)
-    const saved = localStorage.getItem("hiddencopy_plans");
-    if (saved) {
+    const fetchPlans = async () => {
       try {
-        setPlans(JSON.parse(saved));
+        const res = await fetch("/api/plans");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.plans?.length) setPlans(data.plans);
+        }
       } catch {}
-    }
+    };
+    fetchPlans();
   }, []);
 
   const handleBuy = (plan: Plan) => {
@@ -139,7 +165,7 @@ export default function Creditos() {
       }, 5000);
       setTimeout(() => clearInterval(interval), 15 * 60 * 1000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao gerar pagamento");
+      setError(traduzirErro(err));
     } finally {
       setBuying(false);
     }
@@ -158,75 +184,100 @@ export default function Creditos() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold mb-2">Créditos</h1>
-        <p className="text-muted">Escolha o plano ideal para seus criativos.</p>
+      <div className="mb-8 lg:mb-10 animate-fade-in">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-gradient">Créditos</h1>
+        <p className="text-muted text-sm sm:text-base">
+          Escolha o plano ideal para seus criativos.
+        </p>
       </div>
 
-      {/* Saldo atual */}
-      <div className="bg-gradient-to-r from-accent/10 via-accent/5 to-transparent border border-accent/20 rounded-2xl p-8 mb-12">
-        <div className="flex items-center gap-6">
-          <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center">
-            <Sparkles size={32} className="text-accent" />
+      {/* Balance Card */}
+      <div className="glass-card relative overflow-hidden rounded-2xl p-6 sm:p-8 mb-8 lg:mb-12 animate-fade-in-up">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-accent/8 to-transparent pointer-events-none" />
+        <div className="noise" />
+        <div className="relative flex items-center gap-4 sm:gap-6">
+          <div className="w-14 h-14 sm:w-18 sm:h-18 rounded-2xl bg-accent/15 flex items-center justify-center shrink-0 glow-accent">
+            <Sparkles size={28} className="text-accent animate-float sm:hidden" />
+            <Sparkles size={36} className="text-accent animate-float hidden sm:block" />
           </div>
           <div>
-            <p className="text-sm text-muted mb-1">Seu saldo atual</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-bold text-accent">{credits}</span>
-              <span className="text-lg text-muted">créditos</span>
+            <p className="text-xs sm:text-sm text-muted mb-1 uppercase tracking-wider font-medium">
+              Seu saldo atual
+            </p>
+            <div className="flex items-baseline gap-3">
+              <span className="text-4xl sm:text-5xl font-bold text-gradient">{credits}</span>
+              <span className="text-base sm:text-lg text-muted font-medium">créditos</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Planos */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-        {plans.map((plan) => (
+      {/* Plan Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-8 mb-10">
+        {plans.map((plan, index) => (
           <div
             key={plan.id}
-            className={`relative bg-card rounded-2xl flex flex-col overflow-hidden transition-all hover:scale-[1.02] ${
-              plan.popular
-                ? "border-2 border-accent shadow-xl shadow-accent/10"
-                : "border border-border hover:border-muted"
-            }`}
+            className={`
+              glass-card relative rounded-2xl flex flex-col overflow-hidden
+              transition-all duration-300 hover:scale-[1.02]
+              animate-fade-in-up delay-${index + 1}
+              ${
+                plan.popular
+                  ? "border-2 border-accent glow-accent"
+                  : "border border-border/50 hover:border-accent/50"
+              }
+            `}
           >
+            {/* Popular badge */}
             {plan.popular && (
-              <div className="bg-accent text-white text-xs font-bold text-center py-2 tracking-wider uppercase">
-                Mais Popular
+              <div className="relative overflow-hidden">
+                <div className="bg-gradient-to-r from-accent to-yellow-500 animate-gradient text-white text-xs font-bold text-center py-2.5 tracking-widest uppercase">
+                  Mais Popular
+                </div>
               </div>
             )}
 
-            <div className="p-8 flex flex-col flex-1">
-              {/* Ícone e nome */}
-              <div className="flex items-center gap-4 mb-6">
-                <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${
-                  plan.popular ? "bg-accent text-white" : "bg-accent-soft text-accent"
-                }`}>
+            <div className="p-5 sm:p-8 flex flex-col flex-1">
+              {/* Icon + Name */}
+              <div className="flex items-center gap-4 mb-5 sm:mb-6">
+                <div
+                  className={`
+                    w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center
+                    bg-gradient-to-br ${tierGradients[plan.icon] || "from-accent to-accent"}
+                    text-white animate-scale-in shadow-lg
+                  `}
+                >
                   {iconMap[plan.icon] || <Zap size={28} />}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">{plan.name}</h3>
+                  <h3 className="text-lg sm:text-xl font-bold text-foreground">{plan.name}</h3>
                   <p className="text-sm text-muted">{plan.credits} criativos</p>
                 </div>
               </div>
 
-              {/* Preço */}
-              <div className="mb-8">
+              {/* Price */}
+              <div className="mb-6 sm:mb-8">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-sm text-muted">R$</span>
-                  <span className="text-4xl font-bold">{formatPrice(plan.price)}</span>
+                  <span className="text-sm text-muted font-medium">R$</span>
+                  <span className="text-3xl sm:text-4xl font-bold text-foreground">
+                    {formatPrice(plan.price)}
+                  </span>
                 </div>
-                <p className="text-xs text-muted mt-1">
+                <p className="text-xs text-muted mt-1.5">
                   R$ {(plan.price / plan.credits).toFixed(2)} por criativo
                 </p>
               </div>
 
               {/* Features */}
-              <ul className="space-y-4 mb-8 flex-1">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-3">
+              <ul className="space-y-3.5 mb-8 flex-1">
+                {plan.features.map((feature, fIndex) => (
+                  <li
+                    key={feature}
+                    className={`flex items-start gap-3 animate-fade-in-up delay-${Math.min(fIndex + 1, 5)}`}
+                  >
                     <div className="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center shrink-0 mt-0.5">
                       <Check size={12} className="text-success" />
                     </div>
@@ -235,19 +286,21 @@ export default function Creditos() {
                 ))}
               </ul>
 
-              {/* Botão */}
+              {/* Buy Button */}
               <button
                 onClick={() => handleBuy(plan)}
                 disabled={buying}
-                className={`w-full py-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-                  plan.popular
-                    ? "bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/25"
-                    : "bg-card-hover border border-border text-foreground hover:border-accent hover:text-accent"
-                } disabled:opacity-50`}
+                className={`
+                  w-full py-4 rounded-xl font-semibold text-sm transition-all duration-300
+                  flex items-center justify-center gap-2 disabled:opacity-50
+                  ${
+                    plan.popular
+                      ? "bg-gradient-to-r from-accent to-accent-hover text-white btn-glow glow-accent shadow-lg shadow-accent/25 hover:shadow-accent/40"
+                      : "glass border border-border/50 text-foreground hover:border-accent hover:text-accent"
+                  }
+                `}
               >
-                {buying ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : null}
+                {buying ? <Loader2 size={18} className="animate-spin" /> : null}
                 Adquirir Agora
               </button>
             </div>
@@ -255,56 +308,61 @@ export default function Creditos() {
         ))}
       </div>
 
-      {error && (
-        <div className="max-w-md mx-auto bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3 mb-6">
+      {/* Error toast */}
+      {error && !showForm && (
+        <div className="max-w-md mx-auto glass-card border border-red-500/30 rounded-xl p-4 flex items-center gap-3 mb-6 animate-fade-in-up">
           <X size={20} className="text-red-500 shrink-0" />
           <span className="text-red-400 text-sm">{error}</span>
         </div>
       )}
 
-      {/* Modal CPF/Telefone */}
+      {/* CPF/Phone Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-card border border-border rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+          <div className="glass-card animate-scale-in border border-border/50 rounded-2xl p-6 sm:p-8 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold">Finalizar Compra</h3>
+              <h3 className="text-xl font-bold text-foreground">Finalizar Compra</h3>
               <button
-                onClick={() => { setShowForm(false); setError(null); }}
+                onClick={() => {
+                  setShowForm(false);
+                  setError(null);
+                }}
                 className="p-2 hover:bg-card-hover rounded-lg transition-colors"
               >
                 <X size={20} className="text-muted" />
               </button>
             </div>
 
+            {/* Plan summary pill */}
             {pendingPlan && (
-              <div className="bg-accent-soft rounded-xl p-4 mb-6 flex items-center justify-between">
+              <div className="bg-gradient-to-r from-accent/15 to-accent/5 border border-accent/20 rounded-xl p-4 mb-6 flex items-center justify-between">
                 <div>
-                  <p className="font-semibold">{pendingPlan.name}</p>
+                  <p className="font-semibold text-foreground">{pendingPlan.name}</p>
                   <p className="text-xs text-muted">{pendingPlan.credits} créditos</p>
                 </div>
-                <p className="text-xl font-bold text-accent">R$ {formatPrice(pendingPlan.price)}</p>
+                <p className="text-xl font-bold text-gradient">{`R$ ${formatPrice(pendingPlan.price)}`}</p>
               </div>
             )}
 
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium block mb-2">CPF</label>
+                <label className="text-sm font-medium block mb-2 text-foreground">CPF</label>
                 <input
                   type="text"
                   value={cpf}
                   onChange={(e) => setCpf(e.target.value.replace(/\D/g, "").slice(0, 11))}
                   placeholder="Apenas números (11 dígitos)"
-                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors"
+                  className="w-full bg-background/50 border border-glass-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted/60 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_rgba(var(--accent-rgb),0.15)] transition-all"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium block mb-2">Telefone</label>
+                <label className="text-sm font-medium block mb-2 text-foreground">Telefone</label>
                 <input
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
                   placeholder="DDD + número (ex: 51999999999)"
-                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors"
+                  className="w-full bg-background/50 border border-glass-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted/60 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_rgba(var(--accent-rgb),0.15)] transition-all"
                 />
               </div>
 
@@ -313,7 +371,7 @@ export default function Creditos() {
               <button
                 onClick={confirmBuy}
                 disabled={buying}
-                className="w-full py-4 bg-accent text-white rounded-xl font-semibold text-sm hover:bg-accent-hover transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-accent/25 mt-2"
+                className="w-full py-4 bg-gradient-to-r from-accent to-accent-hover text-white rounded-xl font-semibold text-sm btn-glow hover:shadow-accent/40 transition-all disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
               >
                 {buying && <Loader2 size={18} className="animate-spin" />}
                 Gerar QR Code Pix
@@ -323,41 +381,44 @@ export default function Creditos() {
         </div>
       )}
 
-      {/* Modal Pix QR Code */}
+      {/* PIX QR Code Modal */}
       {showPixModal && pixCode && selectedPlan && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-card border border-border rounded-2xl max-w-lg w-full mx-4 shadow-2xl overflow-hidden">
-            {/* Header do modal */}
-            <div className="bg-gradient-to-r from-accent/20 to-accent/5 p-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold">Pagamento Pix</h3>
-                <p className="text-sm text-muted">
-                  Plano {selectedPlan.name} — {selectedPlan.credits} créditos
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+          <div className="glass-card animate-scale-in border border-border/50 rounded-2xl max-w-lg w-full mx-4 shadow-2xl overflow-hidden">
+            {/* Gradient accent stripe header */}
+            <div className="relative">
+              <div className="h-1.5 bg-gradient-to-r from-accent via-yellow-400 to-accent animate-gradient" />
+              <div className="p-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-foreground">Pagamento Pix</h3>
+                  <p className="text-sm text-muted">
+                    Plano {selectedPlan.name} — {selectedPlan.credits} créditos
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowPixModal(false)}
+                  className="p-2 hover:bg-card-hover rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-muted" />
+                </button>
               </div>
-              <button
-                onClick={() => setShowPixModal(false)}
-                className="p-2 hover:bg-card-hover rounded-lg transition-colors"
-              >
-                <X size={20} className="text-muted" />
-              </button>
             </div>
 
-            <div className="p-8">
-              {/* Valor */}
-              <div className="text-center mb-6">
+            <div className="p-5 sm:p-8 pt-0 sm:pt-0">
+              {/* Amount */}
+              <div className="text-center mb-5 sm:mb-6">
                 <p className="text-sm text-muted mb-1">Valor a pagar</p>
-                <p className="text-4xl font-bold text-accent">
+                <p className="text-3xl sm:text-4xl font-bold text-gradient">
                   R$ {formatPrice(selectedPlan.price)}
                 </p>
               </div>
 
               {/* QR Code */}
-              <div className="flex justify-center mb-6">
-                <div className="bg-white p-5 rounded-2xl shadow-inner">
+              <div className="flex justify-center mb-5 sm:mb-6">
+                <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-lg shadow-black/20">
                   <QRCode
                     value={pixCode}
-                    size={250}
+                    size={200}
                     qrStyle="dots"
                     eyeRadius={8}
                     fgColor="#121212"
@@ -365,10 +426,10 @@ export default function Creditos() {
                 </div>
               </div>
 
-              {/* Copia e cola */}
+              {/* Copy button */}
               <button
                 onClick={copyPixCode}
-                className="w-full flex items-center justify-center gap-3 py-4 bg-card-hover border border-border rounded-xl text-sm font-medium hover:border-accent transition-all mb-4"
+                className="w-full glass border border-border/50 flex items-center justify-center gap-3 py-4 rounded-xl text-sm font-medium hover:border-accent hover:shadow-[0_0_15px_rgba(var(--accent-rgb),0.1)] transition-all mb-4"
               >
                 {copied ? (
                   <>
@@ -377,15 +438,15 @@ export default function Creditos() {
                   </>
                 ) : (
                   <>
-                    <Copy size={18} />
-                    Copiar código Pix (copia e cola)
+                    <Copy size={18} className="text-muted" />
+                    <span className="text-foreground">Copiar código Pix (copia e cola)</span>
                   </>
                 )}
               </button>
 
-              {/* Info */}
+              {/* Info pill */}
               <div className="bg-accent-soft rounded-xl p-4 flex items-start gap-3">
-                <div className="w-2 h-2 bg-accent rounded-full mt-1.5 shrink-0 animate-pulse" />
+                <div className="w-2 h-2 bg-accent rounded-full mt-1.5 shrink-0 animate-pulse-glow" />
                 <p className="text-xs text-muted leading-relaxed">
                   Escaneie o QR Code ou copie o código acima e cole no app do seu banco.
                   Seus <strong className="text-foreground">{selectedPlan.credits} créditos</strong> serão

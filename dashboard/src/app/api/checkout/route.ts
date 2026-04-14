@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { createCashIn } from "@/lib/syncpay";
-import { getPlan } from "@/lib/plans";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,14 +24,20 @@ export async function POST(req: NextRequest) {
     }
 
     const { planId, cpf, phone } = await req.json();
-    const plan = getPlan(planId);
+
+    // Buscar plano do banco de dados
+    const serviceClient = createServiceClient();
+    const { data: plan } = await serviceClient
+      .from("plans")
+      .select("*")
+      .eq("id", planId)
+      .single();
 
     if (!plan) {
       return NextResponse.json({ error: "Plano inválido" }, { status: 400 });
     }
 
     // Buscar perfil do usuário
-    const serviceClient = createServiceClient();
     const { data: profile } = await serviceClient
       .from("profiles")
       .select("*")
