@@ -357,7 +357,7 @@ export default function Laboratorio() {
           {downloadUrl && (
             <a
               href={downloadUrl}
-              download={`hiddencopy_${modo}_${Date.now()}.mp4`}
+              download={`${(videoFile?.name?.replace(/\.[^.]+$/, "") || "video")}${musicFile ? "+" + (musicFile.name?.replace(/\.[^.]+$/, "") || "audio") : ""}+hiddencopy.mp4`}
               className="flex items-center justify-center gap-2.5 px-8 py-3.5 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-xl font-semibold text-sm btn-glow glow-success hover:opacity-90 transition-all duration-300 animate-scale-in"
             >
               <Download size={18} />
