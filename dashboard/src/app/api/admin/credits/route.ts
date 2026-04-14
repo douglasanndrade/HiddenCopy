@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
+import { isAdminEmail } from "@/lib/admin";
 
 async function verifyAdmin(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -11,7 +12,7 @@ async function verifyAdmin(req: NextRequest) {
   try {
     const { data, error: authError } = await supabase.auth.getUser();
     if (authError || !data.user) return null;
-    if (data.user.email !== process.env.ADMIN_EMAIL) return null;
+    if (!isAdminEmail(data.user.email)) return null;
     return data.user;
   } catch {
     return null;

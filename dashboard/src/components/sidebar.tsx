@@ -19,7 +19,8 @@ export function Sidebar() {
   const { user, credits, signOut } = useAuth();
   const [open, setOpen] = useState(false);
 
-  const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").split(",").map(e => e.trim().toLowerCase());
+  const isAdmin = !!user?.email && adminEmails.includes(user.email.toLowerCase());
 
   // Fechar drawer ao navegar
   useEffect(() => {

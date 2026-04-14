@@ -3,10 +3,8 @@
 import {
   HelpCircle,
   MessageCircle,
-  Instagram,
   Zap,
   Upload,
-  Music,
   CreditCard,
   ChevronRight,
 } from "lucide-react";
@@ -81,7 +79,7 @@ export default function AjudaPage() {
         className="glass-card rounded-2xl p-5 sm:p-6 flex items-center gap-4 mb-8 animate-fade-in-up delay-1 transition-all duration-300 hover:scale-[1.02] hover:border-accent/50 group"
       >
         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-pink-500 via-accent to-yellow-400 flex items-center justify-center shadow-lg shadow-accent/20 shrink-0 group-hover:shadow-accent/40 transition-all">
-          <Instagram size={26} className="text-white" />
+          <MessageCircle size={26} className="text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-base font-bold text-foreground">

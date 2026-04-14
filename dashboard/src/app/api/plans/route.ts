@@ -31,7 +31,8 @@ export async function PUT(req: NextRequest) {
     if (authError || !data.user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
-    if (data.user.email !== process.env.ADMIN_EMAIL) {
+    const { isAdminEmail } = await import("@/lib/admin");
+    if (!isAdminEmail(data.user.email)) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
   } catch {
