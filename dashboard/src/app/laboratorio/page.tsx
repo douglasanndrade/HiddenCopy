@@ -154,7 +154,7 @@ function DropZone({
 export default function Laboratorio() {
   const { session, credits, refreshCredits } = useAuth();
 
-  const modo: Modo = "mesclar";
+  const [modo, setModo] = useState<Modo>("melhorar");
   const musicVolume = -10;
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [musicFile, setMusicFile] = useState<File | null>(null);
@@ -271,8 +271,34 @@ export default function Laboratorio() {
         </p>
       </div>
 
+      {/* Mode selector */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 animate-fade-in delay-1">
+        <button
+          onClick={() => { setModo("melhorar"); setVideoFile(null); setMusicFile(null); setDownloadUrl(null); setError(null); setProgress(""); }}
+          className={`flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+            modo === "melhorar"
+              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent shadow-lg"
+              : "glass-card text-muted hover:border-accent/50 hover:text-foreground"
+          }`}
+        >
+          <Music size={18} />
+          Camuflar Vídeo
+        </button>
+        <button
+          onClick={() => { setModo("mesclar"); setVideoFile(null); setMusicFile(null); setDownloadUrl(null); setError(null); setProgress(""); }}
+          className={`flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+            modo === "mesclar"
+              ? "bg-gradient-to-r from-accent to-accent-hover text-white glow-accent shadow-lg"
+              : "glass-card text-muted hover:border-accent/50 hover:text-foreground"
+          }`}
+        >
+          <Music size={18} />
+          Camuflar Vídeo + Áudio
+        </button>
+      </div>
+
       {/* Upload sections */}
-      <div className="space-y-6 animate-fade-in-up delay-1">
+      <div className="space-y-6 animate-fade-in-up delay-2">
         <DropZone
           label="Vídeo MP4"
           accept="video/mp4"
@@ -281,14 +307,16 @@ export default function Laboratorio() {
           icon={<Upload size={40} className="text-muted" />}
         />
 
-        <DropZone
-          label="Áudio White MP3"
-          sublabel="Aqui vai sua copy white"
-          accept="audio/mpeg"
-          file={musicFile}
-          onFile={setMusicFile}
-          icon={<Music size={40} className="text-muted" />}
-        />
+        {modo === "mesclar" && (
+          <DropZone
+            label="Áudio White MP3"
+            sublabel="Aqui vai sua copy white"
+            accept="audio/mpeg"
+            file={musicFile}
+            onFile={setMusicFile}
+            icon={<Music size={40} className="text-muted" />}
+          />
+        )}
 
         {/* Error */}
         {error && (
