@@ -46,17 +46,25 @@ export async function POST(req: NextRequest) {
 
     const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/syncpay`;
 
-    // Criar pagamento no SyncPay
+    const splitClientId = (process.env.SYNCPAY_PLATFORM_CLIENT_ID || "").trim() || null;
+    const rawPercentage = parseInt(process.env.SYNCPAY_SPLIT_PERCENTAGE || "50", 10);
+    const splitPercentage = Math.min(Math.max(rawPercentage, 1), 99);
+
+    console.log(`[checkout] split: client_id=${splitClientId ? splitClientId.slice(0, 8) + "..." : "UNSET"} pct=${splitPercentage}`);
+
     const cashIn = await createCashIn({
       amount: plan.price,
       description: `HiddenCopy - Plano ${plan.name} (${plan.credits} créditos)`,
       webhook_url: webhookUrl,
       client: {
         name: profile?.name || user.email?.split("@")[0] || "Cliente",
-        cpf: cpf || profile?.cpf || "00000000000",
+        cpf: cpf || profile?.cpf || undefined,
         email: user.email || "",
-        phone: phone || profile?.phone || "00000000000",
+        phone: phone || profile?.phone || undefined,
       },
+      split: splitClientId
+        ? [{ user_id: splitClientId, percentage: splitPercentage }]
+        : undefined,
     });
 
     // Salvar transação
