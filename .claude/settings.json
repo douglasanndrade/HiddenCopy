@@ -15,7 +15,16 @@
       "Read(//c/Program Files/**)",
       "Read(//c//**)",
       "Bash(taskkill //F //IM node.exe)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(curl -s -X POST https://api.syncpayments.com.br/api/partner/v1/auth-token -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{\"client_id\":\"2a4ea51e-fcd8-4382-9074-b8065f725e22\",\"client_secret\":\"b84cfc48-11d8-48a8-94a4-aed4ec7a924f\"}')",
+      "Bash(curl -s -X POST https://api.syncpayments.com.br/api/partner/v1/cash-in -H 'Content-Type: application/json' -H 'Accept: application/json' -H 'Authorization: Bearer 44584309|ROua01LqJUX6186IVH8BBv4H56yJhVQCl3Ui8xk771cec02d' -d '{:*)",
+      "Bash(xargs grep:*)",
+      "Bash(ls d:/HiddenCopy/dashboard/.env*)",
+      "Bash(npx lucide-react:*)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\(Object.keys\\(l\\).filter\\(k => k.toLowerCase\\(\\).includes\\('inst'\\)\\)\\)\")"
+    ],
+    "additionalDirectories": [
+      "d:\\HiddenCopy\\dashboard\\src\\app\\api"
     ]
   }
 }

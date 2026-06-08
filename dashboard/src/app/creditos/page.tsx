@@ -3,6 +3,7 @@
 import { Check, Zap, Star, Crown, Loader2, Copy, CheckCircle, X, Sparkles, PartyPopper } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { readError } from "@/lib/http";
 import { QRCode } from "react-qrcode-logo";
 
 interface Plan {
@@ -163,8 +164,7 @@ export default function Creditos() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Erro ao gerar pagamento");
+        throw new Error(await readError(res, "Erro ao gerar pagamento"));
       }
 
       const data = await res.json();

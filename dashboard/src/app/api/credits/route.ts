@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { isDevBypass, MOCK_CREDITS } from "@/lib/dev-bypass";
 
 // GET - buscar créditos do usuário
 export async function GET(req: NextRequest) {
+  if (isDevBypass) {
+    return NextResponse.json({ credits: MOCK_CREDITS });
+  }
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
@@ -37,6 +41,9 @@ export async function GET(req: NextRequest) {
 
 // POST - consumir 1 crédito (chamado pelo processamento)
 export async function POST(req: NextRequest) {
+  if (isDevBypass) {
+    return NextResponse.json({ credits: MOCK_CREDITS });
+  }
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { isAdminEmail } from "@/lib/admin";
+import { isDevBypass, MOCK_USER_ID } from "@/lib/dev-bypass";
 
 async function verifyAdmin(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -21,6 +22,19 @@ async function verifyAdmin(req: NextRequest) {
 
 // GET - listar todos os usuários
 export async function GET(req: NextRequest) {
+  if (isDevBypass) {
+    return NextResponse.json({
+      users: [
+        {
+          id: MOCK_USER_ID,
+          email: "dev@local",
+          name: "Dev Local",
+          credits: 999,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+  }
   const admin = await verifyAdmin(req);
   if (!admin) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });

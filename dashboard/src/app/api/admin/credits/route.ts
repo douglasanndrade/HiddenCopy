@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { isAdminEmail } from "@/lib/admin";
+import { isDevBypass } from "@/lib/dev-bypass";
 
 async function verifyAdmin(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -21,6 +22,9 @@ async function verifyAdmin(req: NextRequest) {
 
 // POST - ajustar créditos de um usuário
 export async function POST(req: NextRequest) {
+  if (isDevBypass) {
+    return NextResponse.json({ ok: true });
+  }
   const admin = await verifyAdmin(req);
   if (!admin) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });

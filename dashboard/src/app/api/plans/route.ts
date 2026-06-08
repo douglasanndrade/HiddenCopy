@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
+import { isDevBypass, MOCK_PLANS } from "@/lib/dev-bypass";
 
 // GET - retorna planos (público)
 export async function GET() {
+  if (isDevBypass) {
+    return NextResponse.json({ plans: MOCK_PLANS });
+  }
   const supabase = createServiceClient();
   const { data: plans, error } = await supabase
     .from("plans")
@@ -18,6 +22,9 @@ export async function GET() {
 
 // PUT - atualiza planos (admin only)
 export async function PUT(req: NextRequest) {
+  if (isDevBypass) {
+    return NextResponse.json({ success: true });
+  }
   const authHeader = req.headers.get("authorization");
   if (!authHeader) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });

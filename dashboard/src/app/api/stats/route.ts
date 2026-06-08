@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
+import { isDevBypass, MOCK_STATS } from "@/lib/dev-bypass";
 
 export async function GET(req: NextRequest) {
+  if (isDevBypass) {
+    return NextResponse.json(MOCK_STATS);
+  }
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {

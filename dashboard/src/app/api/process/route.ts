@@ -6,6 +6,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { randomUUID } from "crypto";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
+import { isDevBypass, MOCK_USER } from "@/lib/dev-bypass";
 
 const execFileAsync = promisify(execFile);
 
@@ -14,36 +15,45 @@ const SCRIPTS_DIR = join(process.cwd(), "..");
 
 export async function POST(req: NextRequest) {
   try {
-    // Verificar autenticação
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    let user: { id: string };
+    let serviceClient: ReturnType<typeof createServiceClient> | null = null;
+    let profile: { credits: number } | null = null;
 
-    const token = authHeader.replace("Bearer ", "");
-    const supabase = createServerClient(token);
-
-    let user;
-    try {
-      const { data, error: authError } = await supabase.auth.getUser();
-      if (authError || !data.user) {
+    if (isDevBypass) {
+      user = { id: MOCK_USER.id };
+      profile = { credits: 999 };
+    } else {
+      // Verificar autenticação
+      const authHeader = req.headers.get("authorization");
+      if (!authHeader) {
         return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
       }
-      user = data.user;
-    } catch {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
 
-    // Verificar créditos
-    const serviceClient = createServiceClient();
-    const { data: profile } = await serviceClient
-      .from("profiles")
-      .select("credits")
-      .eq("id", user.id)
-      .single();
+      const token = authHeader.replace("Bearer ", "");
+      const supabase = createServerClient(token);
 
-    if (!profile || profile.credits < 1) {
-      return NextResponse.json({ error: "Créditos insuficientes" }, { status: 403 });
+      try {
+        const { data, error: authError } = await supabase.auth.getUser();
+        if (authError || !data.user) {
+          return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+        }
+        user = data.user;
+      } catch {
+        return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      }
+
+      // Verificar créditos
+      serviceClient = createServiceClient();
+      const { data: p } = await serviceClient
+        .from("profiles")
+        .select("credits")
+        .eq("id", user.id)
+        .single();
+      profile = p;
+
+      if (!profile || profile.credits < 1) {
+        return NextResponse.json({ error: "Créditos insuficientes" }, { status: 403 });
+      }
     }
 
     if (!existsSync(UPLOAD_DIR)) {
@@ -92,21 +102,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Modo inválido" }, { status: 400 });
       }
 
-      // Descontar 1 crédito após processamento bem-sucedido
-      await serviceClient
-        .from("profiles")
-        .update({
-          credits: profile.credits - 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
+      // Descontar 1 crédito após processamento bem-sucedido (skip in dev bypass)
+      if (serviceClient && profile) {
+        await serviceClient
+          .from("profiles")
+          .update({
+            credits: profile.credits - 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", user.id);
 
-      // Registrar uso
-      await serviceClient.from("credit_usage").insert({
-        user_id: user.id,
-        action: modo,
-        credits_used: 1,
-      });
+        // Registrar uso
+        await serviceClient.from("credit_usage").insert({
+          user_id: user.id,
+          action: modo,
+          credits_used: 1,
+        });
+      }
 
       const resultBuffer = await readFile(outputPath);
 

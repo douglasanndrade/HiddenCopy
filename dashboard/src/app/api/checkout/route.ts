@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { createCashIn } from "@/lib/syncpay";
+import { isDevBypass, MOCK_PLANS } from "@/lib/dev-bypass";
 
 export async function POST(req: NextRequest) {
+  if (isDevBypass) {
+    const { planId } = await req.json();
+    const plan =
+      MOCK_PLANS.find((p) => p.id === planId) || MOCK_PLANS[0];
+    return NextResponse.json({
+      pix_code:
+        "00020126360014BR.GOV.BCB.PIX0114DEV-BYPASS-TESTE5204000053039865802BR5905LOCAL6009SAO PAULO62070503***6304ABCD",
+      identifier: `dev-${Date.now()}`,
+      amount: plan.price,
+      plan: plan.name,
+      credits: plan.credits,
+    });
+  }
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {

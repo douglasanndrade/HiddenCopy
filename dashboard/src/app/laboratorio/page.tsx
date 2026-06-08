@@ -13,6 +13,7 @@ import {
   FileAudio,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { readError } from "@/lib/http";
 
 const errosMap: Record<string, string> = {
   "Failed to fetch": "Erro de conexão. Verifique sua internet",
@@ -235,8 +236,7 @@ export default function Laboratorio() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Erro ao processar. Tente novamente");
+        throw new Error(await readError(res, "Erro ao processar. Tente novamente"));
       }
 
       stopProgressSimulation();

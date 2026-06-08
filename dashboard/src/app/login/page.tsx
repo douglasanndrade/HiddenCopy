@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { isDevBypass } from "@/lib/dev-bypass";
 
 const errosAuth: Record<string, string> = {
   "Invalid login credentials": "Email ou senha incorretos",
@@ -37,8 +38,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    if (isDevBypass) router.replace("/dashboard");
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDevBypass) {
+      router.push("/dashboard");
+      return;
+    }
     setError("");
     setLoading(true);
 
