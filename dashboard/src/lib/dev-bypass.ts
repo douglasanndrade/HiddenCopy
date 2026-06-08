@@ -1,8 +1,9 @@
-// Dev-only auth bypass. Enable by setting NEXT_PUBLIC_DEV_BYPASS_AUTH=true in .env.local.
+// Dev-only auth bypass. Enable by setting NEXT_PUBLIC_DEV_MODE=true in .env.local.
+// Same flag used by auth-context.tsx (DEV_MODE), so one switch controls everything.
 // Skips Supabase entirely so the dashboard can run offline with a fake user.
 
 export const isDevBypass =
-  process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
+  process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
 export const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
 
