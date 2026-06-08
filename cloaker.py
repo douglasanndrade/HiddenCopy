@@ -348,7 +348,7 @@ def run(config: dict) -> None:
             log('[cloaker] pass 1/2...')
             subprocess.run(
                 [FFMPEG, '-y', '-i', input_file,
-                 '-c:v', 'libx264', '-preset', 'medium',
+                 '-c:v', 'libx264', '-preset', 'veryfast',
                  '-pix_fmt', 'yuv420p', '-profile:v', 'high',
                  '-b:v', f'{vbr}k', '-pass', '1', '-passlogfile', passlog,
                  '-an', '-f', 'mp4', os.devnull],
@@ -357,7 +357,7 @@ def run(config: dict) -> None:
             log('[cloaker] pass 2/2 (mesclando áudio processado)...')
             subprocess.run(
                 [FFMPEG, '-y', '-i', input_file, '-i', processed_audio,
-                 '-c:v', 'libx264', '-preset', 'medium',
+                 '-c:v', 'libx264', '-preset', 'veryfast',
                  '-pix_fmt', 'yuv420p', '-profile:v', 'high',
                  '-b:v', f'{vbr}k', '-pass', '2', '-passlogfile', passlog,
                  '-c:a', 'aac', '-b:a', f'{audio_kbps}k',
@@ -371,7 +371,7 @@ def run(config: dict) -> None:
             log('[cloaker] mesclando áudio processado com vídeo (libx264 CRF 18 + yuv420p + faststart)...')
             subprocess.run(
                 [FFMPEG, '-y', '-i', input_file, '-i', processed_audio,
-                 '-c:v', 'libx264', '-preset', 'medium',
+                 '-c:v', 'libx264', '-preset', 'veryfast',
                  '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-crf', '18',
                  '-c:a', 'aac', '-b:a', '320k',
                  '-map', '0:v:0', '-map', '1:a:0', '-shortest',

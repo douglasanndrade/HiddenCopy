@@ -12,6 +12,8 @@ const execFileAsync = promisify(execFile);
 const UPLOAD_DIR = join(process.cwd(), "public", "uploads");
 const SCRIPTS_DIR = join(process.cwd(), "..");
 const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
+// Em producao (Docker) usa "python"; local Windows pode setar PYTHON_BIN=py no .env.local
+const PYTHON_BIN = process.env.PYTHON_BIN || "python";
 
 type Modo = "suave" | "oculto" | "clean";
 
@@ -111,7 +113,7 @@ export async function POST(req: NextRequest) {
     try {
       const scriptPath = join(SCRIPTS_DIR, "cloaker.py");
       const { stdout, stderr } = await execFileAsync(
-        "python",
+        PYTHON_BIN,
         [scriptPath, JSON.stringify(config)],
         { timeout: 600000, maxBuffer: 50 * 1024 * 1024 }
       );
