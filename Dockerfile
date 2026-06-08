@@ -17,6 +17,8 @@ RUN pip install --no-cache-dir numpy soundfile librosa scipy
 WORKDIR /app
 
 # Copiar scripts Python
+COPY cloaker.py .
+# Mantidos por compatibilidade (legacy /api/process antigo)
 COPY melhorar_audio.py .
 COPY mesclar_audio.py .
 
