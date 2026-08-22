@@ -12,12 +12,13 @@ RUN apt-get update && apt-get install -y \
 # Criar venv do Python e instalar dependências
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir numpy soundfile librosa scipy
+RUN pip install --no-cache-dir numpy soundfile librosa scipy pillow
 
 WORKDIR /app
 
 # Copiar scripts Python
 COPY cloaker.py .
+COPY image_cloaker.py .
 # Mantidos por compatibilidade (legacy /api/process antigo)
 COPY melhorar_audio.py .
 COPY mesclar_audio.py .

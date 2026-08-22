@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FlaskConical, CreditCard, User, LogOut, Shield, Menu, X, HelpCircle } from "lucide-react";
+import { Home, FlaskConical, ImageIcon, CreditCard, User, LogOut, Shield, Menu, X, HelpCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useState, useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/laboratorio", label: "Laboratório", icon: FlaskConical },
+  { href: "/imagens", label: "Imagens", icon: ImageIcon },
   { href: "/creditos", label: "Créditos", icon: CreditCard },
   { href: "/conta", label: "Minha Conta", icon: User },
   { href: "/ajuda", label: "Ajuda", icon: HelpCircle },
