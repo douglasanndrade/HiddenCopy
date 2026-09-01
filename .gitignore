@@ -6,3 +6,7 @@ ffmpeg_temp
 __pycache__
 dashboard/public/uploads/*
 !dashboard/public/uploads/.gitkeep
+
+# Historico de resultados (volume no servidor)
+dashboard/dados/
+dados/

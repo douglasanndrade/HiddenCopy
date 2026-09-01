@@ -6,3 +6,5 @@ dashboard/.next
 dashboard/.env.local
 *.pyc
 __pycache__
+dados
+dashboard/dados

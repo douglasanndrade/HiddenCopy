@@ -7,12 +7,19 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { randomUUID } from "crypto";
 import { autenticar, cobrarCredito } from "@/lib/api-auth";
+import { createServiceClient } from "@/lib/supabase-server";
 import {
   TEMP_DIR,
   caminhoParcial,
   extensaoSegura,
   garantirTempDir,
 } from "@/lib/uploads-parciais";
+import {
+  DADOS_DIR,
+  dataExpiracao,
+  garantirDadosDir,
+  limparHistorico,
+} from "@/lib/historico";
 
 export const runtime = "nodejs";
 
@@ -53,6 +60,9 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) return auth.resposta;
 
     await garantirTempDir();
+    // Sem cron no container, a limpeza do historico pega carona aqui. E
+    // limitada a uma vez por hora e nao segura a requisicao.
+    void limparHistorico();
 
     let corpo: Corpo;
     try {
@@ -150,19 +160,70 @@ export async function POST(req: NextRequest) {
       if (ocultoPath) await unlink(ocultoPath).catch(() => {});
 
       const { size } = await stat(outputPath);
-      const arquivo = createReadStream(outputPath);
+      const base = (corpo.videoNome || "video")
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^\w\-. ]/g, "_")
+        .slice(0, 60);
+      const nomeSaida = `${base}_hiddencopy.mp4`;
+
+      // Guarda no historico. O arquivo sai da pasta temporaria e vai pro
+      // volume; o registro no banco e quem diz de quem ele e.
+      let caminhoFinal = outputPath;
+      let guardado = false;
+
+      if (auth.usuario.userId) {
+        try {
+          await garantirDadosDir();
+          const arquivoSalvo = `${id}.mp4`;
+          const service = createServiceClient();
+
+          // Registro antes do arquivo: se o insert falhar, nada foi movido e o
+          // fluxo segue normal. Se o rename falhar depois, o registro volta.
+          const { data: linha, error } = await service
+            .from("processamentos")
+            .insert({
+              user_id: auth.usuario.userId,
+              arquivo: arquivoSalvo,
+              nome_original: nomeSaida,
+              modo,
+              tamanho_bytes: size,
+              expira_em: dataExpiracao(),
+            })
+            .select("id")
+            .single();
+          if (error) throw error;
+
+          try {
+            const destino = join(DADOS_DIR, arquivoSalvo);
+            await rename(outputPath, destino);
+            caminhoFinal = destino;
+            guardado = true;
+          } catch (err) {
+            await service.from("processamentos").delete().eq("id", linha.id);
+            throw err;
+          }
+        } catch (err) {
+          // Historico e um extra: nao pode custar ao usuario o processamento
+          // que ele acabou de pagar. Sem ele, segue o download normal.
+          console.error("[historico] não consegui guardar o resultado:", err);
+        }
+      }
+
+      const arquivo = createReadStream(caminhoFinal);
       // Resposta por stream: readFile() traria o video inteiro pra RAM.
-      // 'close' cobre o download completo e tambem o cliente desistindo no
-      // meio -- nos dois casos o arquivo sai do disco.
-      const removerSaida = () => void unlink(outputPath).catch(() => {});
-      arquivo.on("close", removerSaida);
-      arquivo.on("error", removerSaida);
+      // Sem historico, 'close' apaga o temporario -- cobre tanto o download
+      // completo quanto o cliente desistindo no meio.
+      if (!guardado) {
+        const removerSaida = () => void unlink(caminhoFinal).catch(() => {});
+        arquivo.on("close", removerSaida);
+        arquivo.on("error", removerSaida);
+      }
 
       return new NextResponse(Readable.toWeb(arquivo) as unknown as ReadableStream<Uint8Array>, {
         headers: {
           "Content-Type": "video/mp4",
           "Content-Length": String(size),
-          "Content-Disposition": `attachment; filename="hiddencopy_${modo}_${id}.mp4"`,
+          "Content-Disposition": `attachment; filename="${nomeSaida}"`,
         },
       });
     } catch (err) {
