@@ -1,19 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, readFile, unlink, mkdir } from "fs/promises";
-import { existsSync } from "fs";
+import { createReadStream } from "fs";
+import { stat, unlink } from "fs/promises";
 import { join } from "path";
+import { Readable } from "stream";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { randomUUID } from "crypto";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
+import {
+  TEMP_DIR,
+  UploadError,
+  garantirTempDir,
+  receberMultipart,
+  type UploadRecebido,
+} from "@/lib/upload-stream";
+
+export const runtime = "nodejs";
 
 const execFileAsync = promisify(execFile);
 
-const UPLOAD_DIR = join(process.cwd(), "public", "uploads");
 const SCRIPTS_DIR = join(process.cwd(), "..");
 const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 // Em producao (Docker) usa "python"; local Windows pode setar PYTHON_BIN=py no .env.local
 const PYTHON_BIN = process.env.PYTHON_BIN || "python";
+// Teto do upload. Agora limita disco, nao RAM -- o arquivo nunca fica em memoria.
+const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB) || 1024;
+const MAX_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 type Modo = "suave" | "oculto" | "clean";
 
@@ -53,50 +65,59 @@ export async function POST(req: NextRequest) {
       userCredits = profile.credits;
     }
 
-    if (!existsSync(UPLOAD_DIR)) {
-      await mkdir(UPLOAD_DIR, { recursive: true });
+    await garantirTempDir();
+
+    const id = randomUUID();
+
+    // Autenticacao e credito vem antes de aceitar um byte: requisicao sem
+    // permissao nao chega a ocupar disco.
+    let upload: UploadRecebido;
+    try {
+      upload = await receberMultipart(req, {
+        prefixo: id,
+        maxBytes: MAX_BYTES,
+        extensaoPadrao: { video: ".mp4", oculto: ".mp3" },
+      });
+    } catch (err) {
+      if (err instanceof UploadError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      console.error("Upload error:", err);
+      return NextResponse.json({ error: "Falha ao receber o arquivo" }, { status: 400 });
     }
 
-    const formData = await req.formData();
-    const modo = (formData.get("modo") as Modo) || "suave";
-    const videoFile = formData.get("video") as File;
-    const ocultoFile = formData.get("oculto") as File | null;
-    const ocultoVolumeRaw = formData.get("oculto_volume") as string | null;
-    const startSecRaw = formData.get("start_sec") as string | null;
-    const cleanMetaRaw = formData.get("clean_metadata") as string | null;
-    const compressRaw = formData.get("compress") as string | null;
-    const compressPctRaw = formData.get("compress_pct") as string | null;
+    const { campos, arquivos } = upload;
+    const modo = (campos.modo as Modo) || "suave";
+    const videoPath = arquivos.video?.path ?? null;
+    const ocultoPath = arquivos.oculto?.path ?? null;
 
+    // Os campos de texto chegam depois do video no stream, entao a validacao
+    // so pode acontecer com o upload ja completo -- por isso limpa o disco em
+    // cada saida por erro.
     if (!["suave", "oculto", "clean"].includes(modo)) {
+      await upload.limpar();
       return NextResponse.json({ error: "Modo inválido" }, { status: 400 });
     }
-    if (!videoFile) {
+    if (!videoPath) {
+      await upload.limpar();
       return NextResponse.json({ error: "Nenhum vídeo enviado" }, { status: 400 });
     }
-    if (modo === "oculto" && !ocultoFile) {
+    if (modo === "oculto" && !ocultoPath) {
+      await upload.limpar();
       return NextResponse.json({ error: "Modo MP3 oculto requer arquivo oculto" }, { status: 400 });
     }
 
-    const ocultoVolume = ocultoVolumeRaw ? Math.max(0.0005, Math.min(0.1, parseFloat(ocultoVolumeRaw))) : 0.005;
-    const startSec = startSecRaw ? Math.max(0, parseFloat(startSecRaw)) : 0;
-    const cleanMetadata = cleanMetaRaw === null ? true : cleanMetaRaw === "true";
-    const compress = compressRaw === "true";
-    const compressPct = compressPctRaw ? Math.max(10, Math.min(100, parseFloat(compressPctRaw))) : 30;
+    const ocultoVolume = campos.oculto_volume
+      ? Math.max(0.0005, Math.min(0.1, parseFloat(campos.oculto_volume)))
+      : 0.005;
+    const startSec = campos.start_sec ? Math.max(0, parseFloat(campos.start_sec)) : 0;
+    const cleanMetadata = campos.clean_metadata === undefined ? true : campos.clean_metadata === "true";
+    const compress = campos.compress === "true";
+    const compressPct = campos.compress_pct
+      ? Math.max(10, Math.min(100, parseFloat(campos.compress_pct)))
+      : 30;
 
-    const id = randomUUID();
-    const videoPath = join(UPLOAD_DIR, `${id}_input.mp4`);
-    const outputPath = join(UPLOAD_DIR, `${id}_output.mp4`);
-    let ocultoPath: string | null = null;
-
-    const videoBuffer = Buffer.from(await videoFile.arrayBuffer());
-    await writeFile(videoPath, videoBuffer);
-
-    if (ocultoFile) {
-      const ext = ocultoFile.name.includes(".") ? ocultoFile.name.slice(ocultoFile.name.lastIndexOf(".")) : ".mp3";
-      ocultoPath = join(UPLOAD_DIR, `${id}_oculto${ext}`);
-      const ocultoBuffer = Buffer.from(await ocultoFile.arrayBuffer());
-      await writeFile(ocultoPath, ocultoBuffer);
-    }
+    const outputPath = join(TEMP_DIR, `${id}_output.mp4`);
 
     const config = {
       input: videoPath,
@@ -137,22 +158,29 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const resultBuffer = await readFile(outputPath);
+      // Entrada ja cumpriu o papel; sai do disco antes do download comecar.
+      await upload.limpar();
 
-      await unlink(videoPath).catch(() => {});
-      await unlink(outputPath).catch(() => {});
-      if (ocultoPath) await unlink(ocultoPath).catch(() => {});
+      const { size } = await stat(outputPath);
+      const arquivo = createReadStream(outputPath);
+      // O resultado tambem vai por stream: readFile() traria o video inteiro
+      // de volta pra RAM, que e metade do problema de memoria original.
+      // 'close' cobre tanto o download completo quanto o cliente desistindo
+      // no meio -- nos dois casos o arquivo sai do disco.
+      const removerSaida = () => void unlink(outputPath).catch(() => {});
+      arquivo.on("close", removerSaida);
+      arquivo.on("error", removerSaida);
 
-      return new NextResponse(new Uint8Array(resultBuffer), {
+      return new NextResponse(Readable.toWeb(arquivo) as unknown as ReadableStream<Uint8Array>, {
         headers: {
           "Content-Type": "video/mp4",
+          "Content-Length": String(size),
           "Content-Disposition": `attachment; filename="hiddencopy_${modo}_${id}.mp4"`,
         },
       });
     } catch (err) {
-      await unlink(videoPath).catch(() => {});
+      await upload.limpar();
       await unlink(outputPath).catch(() => {});
-      if (ocultoPath) await unlink(ocultoPath).catch(() => {});
 
       const message = err instanceof Error ? err.message : "Erro no processamento";
       console.error("Process error:", err);

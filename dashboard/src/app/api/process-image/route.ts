@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, readFile, unlink, mkdir } from "fs/promises";
-import { existsSync } from "fs";
+import { writeFile, readFile, unlink } from "fs/promises";
 import { join } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { randomUUID } from "crypto";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
+import { TEMP_DIR, garantirTempDir } from "@/lib/upload-stream";
 
 const execFileAsync = promisify(execFile);
-
-const UPLOAD_DIR = join(process.cwd(), "public", "uploads");
 const SCRIPTS_DIR = join(process.cwd(), "..");
 const DEV_MODE = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 const PYTHON_BIN = process.env.PYTHON_BIN || "python";
@@ -64,9 +62,7 @@ export async function POST(req: NextRequest) {
       userCredits = profile.credits;
     }
 
-    if (!existsSync(UPLOAD_DIR)) {
-      await mkdir(UPLOAD_DIR, { recursive: true });
-    }
+    await garantirTempDir();
 
     const formData = await req.formData();
     const intensidade = (formData.get("intensidade") as Intensidade) || "medio";
@@ -92,8 +88,8 @@ export async function POST(req: NextRequest) {
     const inExt = FORMATOS[imagemFile.type];
     // PNG sai como JPEG; os demais mantem o formato de entrada
     const outExt = inExt === ".png" ? ".jpg" : inExt;
-    const inputPath = join(UPLOAD_DIR, `${id}_input${inExt}`);
-    const outputPath = join(UPLOAD_DIR, `${id}_output${outExt}`);
+    const inputPath = join(TEMP_DIR, `${id}_input${inExt}`);
+    const outputPath = join(TEMP_DIR, `${id}_output${outExt}`);
 
     const imagemBuffer = Buffer.from(await imagemFile.arrayBuffer());
     await writeFile(inputPath, imagemBuffer);
