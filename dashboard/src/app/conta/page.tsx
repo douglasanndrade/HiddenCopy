@@ -2,6 +2,7 @@
 
 import { User, Mail, Calendar, CreditCard, Zap, FlaskConical } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { AlterarSenhaCard } from "@/components/alterar-senha-card";
 import Link from "next/link";
 
 export default function MinhaConta() {
@@ -80,8 +81,11 @@ export default function MinhaConta() {
           </div>
         </div>
 
+        {/* Security Card */}
+        <AlterarSenhaCard />
+
         {/* Quick Actions Card */}
-        <div className="glass-card rounded-2xl p-5 sm:p-6 animate-fade-in-up delay-3">
+        <div className="glass-card rounded-2xl p-5 sm:p-6 animate-fade-in-up delay-4">
           <h2 className="text-lg font-semibold mb-5">Ações Rápidas</h2>
           <div className="flex flex-col sm:flex-row gap-3">
             <Link

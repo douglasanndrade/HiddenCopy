@@ -5,12 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Sidebar } from "./sidebar";
 
+// Recuperacao de senha precisa ser publica: quem esqueceu a senha chega aqui
+// deslogado, e o link do email cai direto em /redefinir-senha.
+const PAGINAS_PUBLICAS = ["/", "/login", "/recuperar-senha", "/redefinir-senha"];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
-  const isPublicPage = pathname === "/login" || pathname === "/";
+  const isPublicPage = PAGINAS_PUBLICAS.includes(pathname);
 
   useEffect(() => {
     if (!loading && !user && !isPublicPage) {
