@@ -40,6 +40,68 @@ function traduzirErro(err: unknown): string {
 
 type Modo = "suave" | "oculto";
 
+// Pedacos de 8MB. Cada requisicao dura poucos segundos, entao nenhum proxy no
+// caminho tem chance de cortar por tempo -- era isso que derrubava upload
+// grande com 502 por volta dos 95s.
+const TAMANHO_PARTE = 8 * 1024 * 1024;
+const TENTATIVAS_POR_PARTE = 3;
+/** Fatia da barra reservada ao envio; o resto e a fase de processamento. */
+const FIM_ENVIO = 40;
+
+async function enviarEmPartes(
+  file: File,
+  token: string,
+  aoProgredir: (bytesEnviados: number) => void
+): Promise<string> {
+  const inicio = await fetch("/api/uploads", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!inicio.ok) throw new Error(await readError(inicio, "Falha ao iniciar o envio"));
+  const { id } = await inicio.json();
+
+  let offset = 0;
+  let travas = 0;
+
+  while (offset < file.size) {
+    const anterior = offset;
+    const fim = Math.min(offset + TAMANHO_PARTE, file.size);
+
+    for (let tentativa = 1; tentativa <= TENTATIVAS_POR_PARTE; tentativa++) {
+      try {
+        const res = await fetch(`/api/uploads/${id}?offset=${offset}`, {
+          method: "PUT",
+          body: file.slice(offset, fim),
+        });
+
+        // 409: o servidor gravou uma quantidade diferente da que a gente acha
+        // (pedaco caiu no meio). Ele diz onde parou de verdade e retomamos dali.
+        if (res.status === 409) {
+          const { offset: real } = await res.json();
+          offset = real;
+          break;
+        }
+        if (!res.ok) throw new Error(await readError(res, "Falha ao enviar o arquivo"));
+
+        const { offset: novo } = await res.json();
+        offset = novo;
+        break;
+      } catch (err) {
+        if (tentativa === TENTATIVAS_POR_PARTE) throw err;
+      }
+    }
+
+    // Rede muito ruim pode empurrar a gente pra tras varias vezes; sem isso o
+    // laco poderia ficar girando pra sempre no browser do usuario.
+    travas = offset === anterior ? travas + 1 : 0;
+    if (travas > 5) throw new Error("Envio travou. Verifique sua conexão e tente de novo");
+
+    aoProgredir(offset);
+  }
+
+  return id;
+}
+
 const MODE_LABELS: Record<Modo, { title: string; subtitle: string }> = {
   suave: {
     title: "Cloaker de Criativo",
@@ -51,8 +113,9 @@ const MODE_LABELS: Record<Modo, { title: string; subtitle: string }> = {
   },
 };
 
+// Rotulos da fase de processamento. O envio tem progresso real proprio.
 const progressSteps = [
-  { at: 0, label: "Enviando arquivos..." },
+  { at: 0, label: "Preparando processamento..." },
   { at: 8, label: "Analisando áudio do vídeo..." },
   { at: 20, label: "Extraindo faixas de áudio..." },
   { at: 35, label: "Aplicando filtros de camuflagem..." },
@@ -233,12 +296,16 @@ export default function Laboratorio() {
     setStartSec(0);
   }, [videoFile]);
 
-  const startProgressSimulation = (fileSizeMB: number) => {
-    const estimatedSeconds = Math.max(15, Math.min(fileSizeMB * 1.5, 180));
-    const stepDuration = (estimatedSeconds * 1000) / 100;
-    let currentPercent = 0;
+  // Roda so na fase de processamento, de `inicio` ate 95%. O envio agora tem
+  // progresso de verdade; daqui pra frente o servidor nao tem como reportar
+  // andamento, entao continua estimado.
+  const startProgressSimulation = (fileSizeMB: number, inicio: number) => {
+    const estimatedSeconds = Math.max(10, Math.min(fileSizeMB * 0.8, 180));
+    const faixa = Math.max(1, 95 - inicio);
+    const stepDuration = (estimatedSeconds * 1000) / faixa;
+    let currentPercent = inicio;
 
-    setProgressPercent(0);
+    setProgressPercent(inicio);
     setProgress(progressSteps[0].label);
 
     progressInterval.current = setInterval(() => {
@@ -251,7 +318,10 @@ export default function Laboratorio() {
 
       setProgressPercent(currentPercent);
 
-      const step = [...progressSteps].reverse().find((s) => currentPercent >= s.at);
+      // Os rotulos foram escritos numa escala 0-100, mas a barra agora percorre
+      // so de `inicio` a 95 -- por isso o rotulo sai da fracao dessa faixa.
+      const fracao = ((currentPercent - inicio) / faixa) * 100;
+      const step = [...progressSteps].reverse().find((s) => fracao >= s.at);
       if (step) setProgress(step.label);
     }, stepDuration);
   };
@@ -278,25 +348,50 @@ export default function Laboratorio() {
     setDownloadUrl(null);
 
     const fileSizeMB = videoFile.size / 1024 / 1024;
-    startProgressSimulation(fileSizeMB);
+    const totalBytes = videoFile.size + (modo === "oculto" && ocultoFile ? ocultoFile.size : 0);
+    const token = session.access_token;
 
     try {
-      const formData = new FormData();
-      formData.append("video", videoFile);
-      formData.append("modo", modo);
-      formData.append("oculto_volume", String(ocultoVolume));
-      formData.append("start_sec", String(startEnabled ? startSec : 0));
-      formData.append("clean_metadata", String(cleanMetadata));
-      formData.append("compress", String(compressEnabled));
-      formData.append("compress_pct", String(compressPct));
+      // Fase 1: envio, com progresso real
+      setProgressPercent(0);
+      setProgress("Enviando vídeo...");
+
+      let jaConcluidos = 0;
+      const aoProgredir = (bytesDoAtual: number) => {
+        const pct = ((jaConcluidos + bytesDoAtual) / totalBytes) * FIM_ENVIO;
+        setProgressPercent(Math.min(Math.round(pct), FIM_ENVIO));
+      };
+
+      const videoUploadId = await enviarEmPartes(videoFile, token, aoProgredir);
+      jaConcluidos = videoFile.size;
+
+      let ocultoUploadId: string | undefined;
       if (modo === "oculto" && ocultoFile) {
-        formData.append("oculto", ocultoFile);
+        setProgress("Enviando áudio oculto...");
+        ocultoUploadId = await enviarEmPartes(ocultoFile, token, aoProgredir);
       }
+
+      // Fase 2: processamento
+      startProgressSimulation(fileSizeMB, FIM_ENVIO);
 
       const res = await fetch("/api/process", {
         method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          videoUploadId,
+          ocultoUploadId,
+          videoNome: videoFile.name,
+          ocultoNome: ocultoFile?.name,
+          modo,
+          oculto_volume: ocultoVolume,
+          start_sec: startEnabled ? startSec : 0,
+          clean_metadata: cleanMetadata,
+          compress: compressEnabled,
+          compress_pct: compressPct,
+        }),
       });
 
       if (!res.ok) {

@@ -5,7 +5,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { randomUUID } from "crypto";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
-import { TEMP_DIR, garantirTempDir } from "@/lib/upload-stream";
+import { TEMP_DIR, garantirTempDir } from "@/lib/uploads-parciais";
 
 const execFileAsync = promisify(execFile);
 const SCRIPTS_DIR = join(process.cwd(), "..");
