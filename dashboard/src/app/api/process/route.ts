@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createReadStream } from "fs";
-import { rename, stat, unlink } from "fs/promises";
+import { copyFile, rename, stat, unlink } from "fs/promises";
 import { join } from "path";
 import { Readable } from "stream";
 import { execFile } from "child_process";
@@ -36,6 +36,8 @@ type Corpo = {
   ocultoUploadId?: string;
   videoNome?: string;
   ocultoNome?: string;
+  /** Lote: o mesmo audio oculto serve varios videos, entao nao pode ser consumido. */
+  manterOculto?: boolean;
   modo?: Modo;
   oculto_volume?: number;
   start_sec?: number;
@@ -79,8 +81,12 @@ export async function POST(req: NextRequest) {
     const parcialVideo = corpo.videoUploadId ? caminhoParcial(corpo.videoUploadId) : null;
     const parcialOculto = corpo.ocultoUploadId ? caminhoParcial(corpo.ocultoUploadId) : null;
 
+    const manterOculto = corpo.manterOculto === true;
+
     if (parcialVideo) paraLimpar.push(parcialVideo);
-    if (parcialOculto) paraLimpar.push(parcialOculto);
+    // Audio compartilhado pelo lote fica no disco; quem apaga e o browser, com
+    // DELETE /api/uploads/:id quando a fila termina.
+    if (parcialOculto && !manterOculto) paraLimpar.push(parcialOculto);
 
     if (!parcialVideo) {
       await limpar();
@@ -111,7 +117,8 @@ export async function POST(req: NextRequest) {
     if (parcialOculto) {
       ocultoPath = join(TEMP_DIR, `${id}_oculto${extensaoSegura(corpo.ocultoNome, ".mp3")}`);
       try {
-        await rename(parcialOculto, ocultoPath);
+        if (manterOculto) await copyFile(parcialOculto, ocultoPath);
+        else await rename(parcialOculto, ocultoPath);
         paraLimpar.push(ocultoPath);
       } catch {
         await limpar();
@@ -170,6 +177,7 @@ export async function POST(req: NextRequest) {
       // volume; o registro no banco e quem diz de quem ele e.
       let caminhoFinal = outputPath;
       let guardado = false;
+      let historicoId: string | null = null;
 
       if (auth.usuario.userId) {
         try {
@@ -198,6 +206,7 @@ export async function POST(req: NextRequest) {
             await rename(outputPath, destino);
             caminhoFinal = destino;
             guardado = true;
+            historicoId = linha.id;
           } catch (err) {
             await service.from("processamentos").delete().eq("id", linha.id);
             throw err;
@@ -224,6 +233,9 @@ export async function POST(req: NextRequest) {
           "Content-Type": "video/mp4",
           "Content-Length": String(size),
           "Content-Disposition": `attachment; filename="${nomeSaida}"`,
+          // Com o id, o lote nao precisa baixar o corpo agora: cancela a
+          // resposta e busca pelo historico quando o usuario clicar.
+          ...(historicoId ? { "X-Historico-Id": historicoId } : {}),
         },
       });
     } catch (err) {
