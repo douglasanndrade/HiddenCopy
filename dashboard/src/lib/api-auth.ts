@@ -49,6 +49,7 @@ export async function autenticar(
   try {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) {
+      console.error("[auth] token recusado:", error?.message || "sem usuário");
       return {
         ok: false,
         resposta: NextResponse.json({ error: "Não autenticado" }, { status: 401 }),
@@ -56,7 +57,8 @@ export async function autenticar(
     }
     userId = data.user.id;
     email = (data.user.email || "").toLowerCase();
-  } catch {
+  } catch (err) {
+    console.error("[auth] falha ao validar token:", err);
     return {
       ok: false,
       resposta: NextResponse.json({ error: "Não autenticado" }, { status: 401 }),
@@ -64,13 +66,28 @@ export async function autenticar(
   }
 
   const serviceClient = createServiceClient();
-  const { data: profile } = await serviceClient
+  const { data: profile, error: erroPerfil } = await serviceClient
     .from("profiles")
     .select("credits, is_admin")
     .eq("id", userId)
     .single();
 
+  // Separado do token invalido de proposito: service key errada no servidor
+  // caia aqui e aparecia pro usuario como "sessao expirada", e relogar nao
+  // resolvia nada.
+  if (erroPerfil && erroPerfil.code !== "PGRST116") {
+    console.error("[auth] falha ao ler perfil:", erroPerfil.message);
+    return {
+      ok: false,
+      resposta: NextResponse.json(
+        { error: `Falha ao carregar seu perfil: ${erroPerfil.message}` },
+        { status: 500 }
+      ),
+    };
+  }
+
   if (!profile) {
+    console.error("[auth] perfil não existe para", userId);
     return {
       ok: false,
       resposta: NextResponse.json({ error: "Não autenticado" }, { status: 401 }),
