@@ -68,7 +68,9 @@ export async function autenticar(
   const serviceClient = createServiceClient();
   const { data: profile, error: erroPerfil } = await serviceClient
     .from("profiles")
-    .select("credits, is_admin")
+    // "*" e nao "credits, is_admin": em producao a coluna is_admin nao existe,
+    // e pedir coluna inexistente derruba a consulta inteira.
+    .select("*")
     .eq("id", userId)
     .single();
 
